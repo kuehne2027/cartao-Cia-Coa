@@ -607,16 +607,14 @@ body.embed::before{display:none}
       <div class="field" id="fNome"><label for="pNome">Nome completo</label><input id="pNome" autocomplete="name" placeholder="Como está no documento"><span class="err"></span></div>
       <div class="field" id="fCpf"><label for="pCpf">CPF</label><input id="pCpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14"><span class="err"></span></div>
       <div class="field" id="fExt"><label for="pExt">EXT</label><input id="pExt" autocomplete="off" placeholder="Seu login / EXT"><span class="err"></span></div>
-      <div class="field" id="fMotivo"><label for="pMotivo">Situação do cartão</label>
-        <div class="selwrap">
-          <select id="pMotivo" required>
-            <option value="" disabled selected hidden>Selecione</option>
-            <option>Tenho cartão</option>
-            <option>Nunca tive cartão</option>
-            <option>2ª via de cartão</option>
-          </select>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-        </div><span class="err"></span></div>
+      <div class="field" id="fMotivo"><label>Situação do cartão</label>
+        <div id="motivoCards" style="display:grid;grid-template-columns:1fr;gap:8px">
+          <button class="btn motivo-opt" type="button" data-motivo="Tenho cartão" style="justify-content:flex-start">✓ Tenho cartão</button>
+          <button class="btn motivo-opt" type="button" data-motivo="Nunca tive cartão" style="justify-content:flex-start">＋ Ainda não tenho cartão</button>
+          <button class="btn motivo-opt" type="button" data-motivo="2ª via de cartão" style="justify-content:flex-start">↻ Perdi / preciso de 2ª via</button>
+        </div>
+        <input id="pMotivo" type="hidden" value="">
+        <span class="err"></span></div>
       <div id="cardExtra" class="reveal" hidden style="display:none;flex-direction:column;gap:10px">
         <div class="field" id="fCartao"><label for="pCartao">Número do Cartão Lenel</label><input id="pCartao" inputmode="numeric" autocomplete="off" maxlength="17" placeholder="17 dígitos do cartão"><span class="err"></span></div>
         <div class="card-number-guide">
@@ -1646,7 +1644,15 @@ function initPublic(){
   nome.oninput = () => { art("artName", nome.value.trim() || "Seu nome aqui"); setErr("fNome"); };
   cpf.oninput = () => { cpf.value = maskCpf(cpf.value); art("artCpf", cpf.value || "•••.•••.•••-••"); setErr("fCpf"); };
   ext.oninput = () => setErr("fExt");
-  motivo.onchange = () => { setErr("fMotivo"); const tem=motivo.value==="Tenho cartão"; $("#cardExtra").hidden=!tem;$("#cardExtra").style.display=tem?"flex":"none";if(!tem){cartaoPub.value="";setErr("fCartao")}$("#pubSend").textContent=tem?"Enviar":"Enviar pedido"; };
+  const setMotivo = val => {
+    motivo.value=val; setErr("fMotivo");
+    $$(".motivo-opt").forEach(b=>{const on=b.dataset.motivo===val;b.classList.toggle("primary",on);b.setAttribute("aria-pressed",on?"true":"false")});
+    const tem=val==="Tenho cartão";
+    $("#cardExtra").hidden=!tem; $("#cardExtra").style.display=tem?"flex":"none";
+    if(!tem){cartaoPub.value="";setErr("fCartao")}
+    $("#pubSend").textContent=tem?"Enviar cadastro":"Enviar pedido";
+  };
+  $$(".motivo-opt").forEach(b=>b.onclick=()=>setMotivo(b.dataset.motivo));
   cartaoPub.oninput=()=>{cartaoPub.value=cartaoPub.value.replace(/\D/g,"").slice(0,17);setErr("fCartao")};
   selfieIn.onchange=async()=>{setErr("fSelfie");const f=selfieIn.files&&selfieIn.files[0];if(!f){selfieData="";return}if(!f.type.startsWith("image/")){setErr("fSelfie","Escolha uma imagem.");selfieIn.value="";return}try{selfieData=await resizeSelfie(f);$("#selfiePrev").innerHTML=`<img src="${selfieData}" alt="Prévia da selfie">`;}catch{setErr("fSelfie","Não foi possível ler esta foto.");}};
   $("#pubForm").onsubmit = async e => {
@@ -1665,7 +1671,6 @@ function initPublic(){
     try {
       if (mo === "Tenho cartão") {
         await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, cartao:cardPub, updated_at:t }], "cpf");
-        await store.insert(T.pedidos, { nome:n, cpf:c, ext:x, cartao:cardPub, motivo:mo, status:"concluido", concluido_em:t, email_status:"nao_enviado" }).catch(() => {});
         $("#doneTitle").textContent = "Cadastro enviado";
         $("#doneText").textContent = "Seus dados foram salvos no controle. Não precisa fazer mais nada.";
       } else {
@@ -1688,7 +1693,7 @@ function initPublic(){
     btn.disabled = false; btn.textContent = label;
   };
   $("#pubAgain").onclick = () => {
-    $("#pubForm").reset(); motivo.selectedIndex = 0; $("#pubSend").textContent = "Enviar";
+    $("#pubForm").reset(); motivo.value=""; $$(".motivo-opt").forEach(b=>{b.classList.remove("primary");b.setAttribute("aria-pressed","false")}); $("#pubSend").textContent = "Enviar";
     art("artName", "Seu nome aqui"); art("artCpf", "•••.•••.•••-••");
     $("#pubDone").hidden = true; $("#pubCard").hidden = false; nome.focus();
   };
