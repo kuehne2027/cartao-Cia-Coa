@@ -628,8 +628,8 @@ body.embed::before{display:none}
           <div class="hint"><b>Olhe o verso do cartão, na ponta inferior direita.</b> Digite os <b>17 números</b> que aparecem nessa posição. A imagem é apenas um exemplo para mostrar onde localizar a numeração.</div>
         </div>
       </div>
-      <div class="field" id="fSelfie"><label>Selfie para compor o cadastro</label>
-        <div class="photo-pick"><div class="photo-prev" id="selfiePrev">FOTO</div><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:13px">Envie uma foto do rosto</div><div class="hint" style="margin:2px 0 8px">Foto de frente, com boa iluminação e sem filtros.</div><label class="btn small" for="pSelfie">Tirar / escolher selfie</label><input id="pSelfie" type="file" accept="image/*" capture="user"></div></div><span class="err"></span>
+      <div class="field" id="fSelfie"><label>Selfie — prévia opcional</label>
+        <div class="photo-pick"><div class="photo-prev" id="selfiePrev">FOTO</div><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:13px">Visualize uma foto do rosto</div><div class="hint" style="margin:2px 0 8px">A foto aparece apenas nesta prévia. O envio e o armazenamento da selfie ainda não estão disponíveis.</div><label class="btn small" for="pSelfie">Tirar / escolher selfie</label><input id="pSelfie" type="file" accept="image/*" capture="user"></div></div><span class="err"></span>
       </div>
       <button class="btn primary" type="submit" id="pubSend" style="padding:12px;font-size:14px">Enviar</button>
       <p class="hint" style="margin:0;text-align:center">Seus dados são usados apenas para o controle de acesso.</p>
@@ -664,8 +664,8 @@ const CONFIG = {
   SUPABASE_URL: "https://cjentqthseecgizptyqe.supabase.co",
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqZW50cXRoc2VlY2dpenB0eXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxMDY0MTIsImV4cCI6MjEwNTY4MjQxMn0.UWIWzQIEZOWQ2RPOyPmsD3Jo2A6G90W9Rwl1rtEQZv0",      // cole aqui a anon key (Project Settings → API). Vazio = modo demonstração
   ADMIN_PIN: "",
-  FORM_URL: "https://cartao-lenel-kn.netlify.app",   // link que o pessoal recebe (só formulário)
-  FORM_ONLY_HOST: "cartao-lenel-kn.netlify.app"      // neste endereço o app mostra apenas o formulário               // opcional: PIN para abrir o painel (o formulário público não pede PIN)
+  FORM_URL: "",   // link que o pessoal recebe (só formulário)
+  FORM_ONLY_HOST: ""      // neste endereço o app mostra apenas o formulário               // opcional: PIN para abrir o painel (o formulário público não pede PIN)
 };
 
 /* ================================================================ utilidades */
@@ -1449,7 +1449,7 @@ $("#bancoChips").onclick = e => { const b = e.target.closest("[data-bf]"); if (!
 /* ---------- tabs ---------- */
 function setTab(t){
   if (!["banco", "form", "pedidos", "envio", "config"].includes(t)) t = "banco";
-  if (t === "form" && !$("#formFrame").src) $("#formFrame").src = location.href.split("#")[0].split("?")[0] + "#cadastro";
+  if (t === "form" && !$("#formFrame").getAttribute("src")) $("#formFrame").src = formUrl();
   if (t === "form") { S.seenForm = Date.now(); try { localStorage.setItem("lenel_seen_form", S.seenForm); } catch {} renderFeed(); }
   S.tab = t;
   $$(".tab").forEach(x => x.classList.toggle("on", x.dataset.tab === t));
@@ -1460,7 +1460,12 @@ function setTab(t){
 }
 
 /* ---------- link público ---------- */
-const formUrl = () => CONFIG.FORM_URL || (location.href.split("#")[0].split("?")[0] + "#cadastro");
+const formUrl = () => {
+  const url = new URL(CONFIG.FORM_URL || location.href, location.href);
+  url.search = "";
+  url.hash = "cadastro";
+  return url.href;
+};
 function renderFormLink(){
   const u = formUrl();
   $("#formLink").textContent = u;
@@ -1654,7 +1659,7 @@ function initPublic(){
   };
   $$(".motivo-opt").forEach(b=>b.onclick=()=>setMotivo(b.dataset.motivo));
   cartaoPub.oninput=()=>{cartaoPub.value=cartaoPub.value.replace(/\D/g,"").slice(0,17);setErr("fCartao")};
-  selfieIn.onchange=async()=>{setErr("fSelfie");const f=selfieIn.files&&selfieIn.files[0];if(!f){selfieData="";return}if(!f.type.startsWith("image/")){setErr("fSelfie","Escolha uma imagem.");selfieIn.value="";return}try{selfieData=await resizeSelfie(f);$("#selfiePrev").innerHTML=`<img src="${selfieData}" alt="Prévia da selfie">`;}catch{setErr("fSelfie","Não foi possível ler esta foto.");}};
+  selfieIn.onchange=async()=>{setErr("fSelfie");const f=selfieIn.files&&selfieIn.files[0];if(!f){selfieData="";$("#selfiePrev").textContent="FOTO";return}selfieData="";$("#selfiePrev").textContent="FOTO";if(!f.type.startsWith("image/")){setErr("fSelfie","Escolha uma imagem.");selfieIn.value="";return}try{selfieData=await resizeSelfie(f);$("#selfiePrev").innerHTML=`<img src="${selfieData}" alt="Prévia da selfie">`;}catch{setErr("fSelfie","Não foi possível ler esta foto.");}};
   $("#pubForm").onsubmit = async e => {
     e.preventDefault();
     const n = normName(nome.value), c = onlyDigits(cpf.value), x = ext.value.trim(), mo = motivo.value, cardPub=cartaoPub.value.trim();
@@ -1693,7 +1698,11 @@ function initPublic(){
     btn.disabled = false; btn.textContent = label;
   };
   $("#pubAgain").onclick = () => {
-    $("#pubForm").reset(); motivo.value=""; $$(".motivo-opt").forEach(b=>{b.classList.remove("primary");b.setAttribute("aria-pressed","false")}); $("#pubSend").textContent = "Enviar";
+    $("#pubForm").reset();
+    selfieData=""; $("#selfiePrev").textContent="FOTO";
+    $("#cardExtra").hidden=true; $("#cardExtra").style.display="none";
+    ["fNome","fCpf","fExt","fMotivo","fCartao","fSelfie"].forEach(f=>setErr(f));
+    motivo.value=""; $$(".motivo-opt").forEach(b=>{b.classList.remove("primary");b.setAttribute("aria-pressed","false")}); $("#pubSend").textContent = "Enviar";
     art("artName", "Seu nome aqui"); art("artCpf", "•••.•••.•••-••");
     $("#pubDone").hidden = true; $("#pubCard").hidden = false; nome.focus();
   };
@@ -1727,3 +1736,4 @@ addEventListener("hashchange", () => { if (location.hostname === CONFIG.FORM_ONL
 </script>
 </body>
 </html>
+
