@@ -626,8 +626,8 @@ body.embed::before{display:none}
           <div class="hint"><b>Olhe o verso do cartão, na ponta inferior direita.</b> Digite os <b>17 números</b> que aparecem nessa posição. A imagem é apenas um exemplo para mostrar onde localizar a numeração.</div>
         </div>
       </div>
-      <div class="field" id="fSelfie"><label>Foto do cadastro (opcional)</label>
-        <div class="photo-pick"><div class="photo-prev" id="selfiePrev">FOTO</div><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:13px">Tire ou escolha uma foto do rosto</div><div class="hint" style="margin:2px 0 8px">A foto será salva junto com seus dados e exibida no cadastro do Controle Lenel.</div><label class="btn small" for="pSelfie">Tirar / escolher selfie</label><input id="pSelfie" type="file" accept="image/*" capture="user"></div></div><span class="err"></span>
+      <div class="field" id="fSelfie"><label>Selfie do cadastro <b style="color:var(--crit)">*</b></label>
+        <div class="photo-pick"><div class="photo-prev" id="selfiePrev">FOTO</div><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:13px">Tire ou escolha uma foto do rosto</div><div class="hint" style="margin:2px 0 8px"><b>Obrigatória para concluir.</b> Tire ou escolha uma foto nítida do rosto. Ela será salva junto com seus dados e exibida no cadastro do Controle Lenel.</div><label class="btn small" for="pSelfie">Tirar / escolher selfie *</label><input id="pSelfie" type="file" accept="image/*" capture="user" required></div></div><span class="err"></span>
       </div>
       <button class="btn primary" type="submit" id="pubSend" style="padding:12px;font-size:14px">Enviar</button>
       <p class="hint" style="margin:0;text-align:center">Seus dados são usados apenas para o controle de acesso.</p>
@@ -1748,7 +1748,8 @@ function initPublic(){
     if (mo==="Tenho cartão" && !/^\d{17}$/.test(cardPub)) { setErr("fCartao","Informe os 17 dígitos do Cartão Lenel."); ok=false; }
     if ($("#pubSend").disabled) return;
     if (selfieTask) { $("#pubSend").disabled = true; await selfieTask; $("#pubSend").disabled = false; }
-    if (selfieIn.files?.length && !selfieData) { setErr("fSelfie", "A foto não foi carregada. Escolha outra imagem ou remova o arquivo."); ok = false; }
+    if (!selfieIn.files?.length) { setErr("fSelfie", "A selfie é obrigatória para concluir o cadastro."); ok = false; }
+    else if (!selfieData) { setErr("fSelfie", "A selfie não foi carregada. Tire ou escolha outra foto para continuar."); ok = false; }
     if (!ok) return;
     const btn = $("#pubSend"), label = btn.textContent; btn.disabled = true; btn.textContent = "Enviando…";
     const t = nowIso();
