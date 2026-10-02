@@ -1,0 +1,1720 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Controle Lenel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>if(window.tailwind)tailwind.config={corePlugins:{preflight:false}}</script>
+<script src="https://cdn.jsdelivr.net/npm/motion@11.18.2/dist/motion.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4.4.1/dist/email.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Layout: nav de vidro fixa (estilo Apple) + bento de indicadores + painel por aba. Mesma família visual do Aduana ao Vivo. */
+:root{
+  color-scheme:light;
+  --bg:#EEF1F4; --surface:#FFFFFF; --surface-2:#F5F7F9; --line:#D7DDE4; --line-2:#E6EAEF;
+  --ink:#111C26; --ink-2:#465463; --ink-3:#77838F;
+  --accent:#0F4C81; --accent-ink:#FFFFFF; --accent-soft:#E1EBF5;
+  --ok:#177E4C; --ok-bg:#E2F2E9; --warn:#A96A06; --warn-bg:#FBEFD6;
+  --crit:#C0352B; --crit-bg:#FBE5E2; --run:#1F6FD1; --run-bg:#E3EDFB; --idle:#7C8995; --idle-bg:#EBEEF2;
+  --glass:rgba(255,255,255,.66); --glass-line:rgba(17,28,38,.08);
+  --blob-a:rgba(15,76,129,.16); --blob-b:rgba(31,111,209,.10); --blob-c:rgba(23,126,76,.08);
+  --shadow:0 1px 2px rgba(17,28,38,.06),0 8px 24px rgba(17,28,38,.06);
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0B1116; --surface:#151D25; --surface-2:#1A242E; --line:#2A3642; --line-2:#222D38;
+    --ink:#E6EDF3; --ink-2:#A5B2BE; --ink-3:#74828F;
+    --accent:#5FA3E6; --accent-ink:#08131D; --accent-soft:#132A40;
+    --ok:#44C285; --ok-bg:#11301F; --warn:#E3A73A; --warn-bg:#33260C;
+    --crit:#F26B5F; --crit-bg:#3B1714; --run:#63A3F2; --run-bg:#13263D; --idle:#7F8D9A; --idle-bg:#1E2832;
+    --glass:rgba(21,29,37,.62); --glass-line:rgba(255,255,255,.07);
+    --blob-a:rgba(95,163,230,.14); --blob-b:rgba(99,163,242,.07); --blob-c:rgba(68,194,133,.06);
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.28);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0B1116; --surface:#151D25; --surface-2:#1A242E; --line:#2A3642; --line-2:#222D38;
+  --ink:#E6EDF3; --ink-2:#A5B2BE; --ink-3:#74828F;
+  --accent:#5FA3E6; --accent-ink:#08131D; --accent-soft:#132A40;
+  --ok:#44C285; --ok-bg:#11301F; --warn:#E3A73A; --warn-bg:#33260C;
+  --crit:#F26B5F; --crit-bg:#3B1714; --run:#63A3F2; --run-bg:#13263D; --idle:#7F8D9A; --idle-bg:#1E2832;
+  --glass:rgba(21,29,37,.62); --glass-line:rgba(255,255,255,.07);
+  --blob-a:rgba(95,163,230,.14); --blob-b:rgba(99,163,242,.07); --blob-c:rgba(68,194,133,.06);
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.28);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45;min-height:100vh;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(40vw 40vw at 8% 0%,var(--blob-a),transparent 70%),
+             radial-gradient(35vw 35vw at 100% 12%,var(--blob-b),transparent 70%),
+             radial-gradient(45vw 30vw at 60% 100%,var(--blob-c),transparent 70%)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono)} .num{font-variant-numeric:tabular-nums}
+.disp{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.02em}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:16px}
+
+/* nav de vidro */
+.nav{position:sticky;top:0;z-index:30;background:var(--glass);backdrop-filter:saturate(180%) blur(18px);-webkit-backdrop-filter:saturate(180%) blur(18px);border-bottom:1px solid var(--glass-line)}
+.nav-in{display:flex;align-items:center;gap:14px;min-height:56px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center}
+.brand h1{margin:0;font-family:var(--f-display);font-weight:700;font-size:24px;letter-spacing:.02em;text-transform:uppercase;line-height:1}
+.live{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-mono);font-size:11px;color:var(--ink-2);letter-spacing:.06em}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.8s infinite}
+.live.demo .dot{background:var(--warn)} .live.off .dot{background:var(--idle);animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 55%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{position:relative;border:0;background:none;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:500;color:var(--ink-2);white-space:nowrap;display:inline-flex;align-items:center;gap:6px;transition:color .15s,background .15s}
+.tab:hover{color:var(--ink);background:var(--surface-2)}
+.tab.on{color:var(--ink);background:var(--surface);box-shadow:var(--shadow)}
+.tab .cnt{font-family:var(--f-mono);font-size:10.5px;min-width:18px;padding:1px 5px;border-radius:999px;background:var(--crit);color:#fff;text-align:center}
+.tab .cnt.z{display:none}
+.iconbtn{border:1px solid var(--line);background:var(--surface);border-radius:8px;width:34px;height:34px;display:grid;place-items:center;transition:transform .12s}
+.iconbtn:hover{transform:scale(1.05)} .iconbtn:active{transform:scale(.94)}
+@media (max-width:760px){.tabs{order:3;width:100%;padding-bottom:8px}}
+
+/* botões táteis */
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:8px 13px;font-weight:500;font-size:13px;display:inline-flex;align-items:center;gap:7px;justify-content:center;transition:transform .12s ease,box-shadow .15s,border-color .15s,filter .15s;white-space:nowrap}
+a.btn{text-decoration:none;color:inherit}
+.btn:hover{transform:scale(1.02);border-color:var(--ink-3)}
+.btn:active{transform:scale(.96)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
+.btn.danger{color:var(--crit)} .btn.danger:hover{border-color:var(--crit)}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.ghost:hover{background:var(--surface-2)}
+.btn.small{padding:5px 10px;font-size:12px;border-radius:8px}
+.btn[disabled]{opacity:.5;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.btn,.iconbtn{transition:none}.btn:hover,.btn:active,.iconbtn:hover{transform:none}.dot{animation:none}}
+
+/* bento */
+.bento{display:grid;grid-template-columns:2.1fr repeat(4,minmax(0,1fr));gap:8px;margin-top:14px}
+.cell.big .toolbar{flex-wrap:nowrap}
+.brand h1{white-space:nowrap}
+@media (max-width:520px){.brand h1{font-size:19px}.live{display:none}}
+.cell{background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--glass-line);border-radius:12px;padding:9px 12px;box-shadow:var(--shadow);min-width:0;display:flex;flex-direction:column;justify-content:center}
+.cell.big{flex-direction:row;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.cell .l{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell .l i{width:7px;height:7px;border-radius:2px;display:inline-block;flex:none}
+.cell .row{display:flex;align-items:baseline;gap:8px;margin-top:2px;min-width:0}
+.cell .v{font-family:var(--f-display);font-weight:600;font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
+.cell .s{font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.cell .toolbar{gap:6px}
+@media (max-width:1000px){.bento{grid-template-columns:repeat(2,minmax(0,1fr))}.cell.big{grid-column:span 2}}
+
+/* painel */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);margin-top:16px;min-width:0}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:10px 14px;flex-wrap:wrap;padding:16px 18px;border-bottom:1px solid var(--line-2)}
+.ph h2{margin:0;font-family:var(--f-display);font-weight:700;font-size:20px;letter-spacing:.04em;text-transform:uppercase;display:flex;align-items:center;gap:10px}
+.ph h2 .c{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);letter-spacing:0;font-weight:400;text-transform:none}
+.ph p{margin:2px 0 0;color:var(--ink-2);font-size:12.5px}
+.pb{padding:16px 18px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.search{border:1px solid var(--line);background:var(--surface-2);border-radius:9px;padding:7px 11px;width:240px;max-width:100%}
+@media (max-width:640px){.search{width:100%}}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:12.5px;display:inline-flex;gap:6px;align-items:center;transition:transform .12s}
+.chip:active{transform:scale(.95)}
+.chip b{font-family:var(--f-mono);font-weight:500;color:var(--ink-3);font-size:11.5px}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)} .chip.on b{color:inherit;opacity:.75}
+
+.tablebox{overflow:auto;max-height:620px}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+th{position:sticky;top:0;background:var(--surface-2);color:var(--ink-2);font-weight:500;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
+td{padding:9px 12px;border-bottom:1px solid var(--line-2);white-space:nowrap;font-variant-numeric:tabular-nums;vertical-align:middle}
+tbody tr{transition:background .12s} tbody tr:hover td{background:var(--surface-2)}
+td.name{font-weight:500;white-space:normal;min-width:180px}
+td.r,th.r{text-align:right}
+.cardno{font-family:var(--f-mono);font-weight:600;background:var(--accent-soft);color:var(--accent);padding:2px 8px;border-radius:6px}
+.muted{color:var(--ink-3)}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:500;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-ok{background:var(--ok-bg);color:var(--ok)} .p-warn{background:var(--warn-bg);color:var(--warn)}
+.p-crit{background:var(--crit-bg);color:var(--crit)} .p-run{background:var(--run-bg);color:var(--run)} .p-idle{background:var(--idle-bg);color:var(--idle)}
+.empty{padding:36px 18px;text-align:center;color:var(--ink-3)}
+.empty strong{display:block;color:var(--ink-2);font-size:14px;margin-bottom:4px}
+
+/* pedidos em cards */
+.plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.pcard{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--surface);display:flex;flex-direction:column;gap:10px;transition:border-color .15s,box-shadow .15s,transform .15s;min-width:0}
+.pcard:hover{border-color:var(--ink-3);box-shadow:var(--shadow);transform:translateY(-1px)}
+.pcard.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.pcard .top{display:flex;gap:10px;align-items:flex-start}
+.pcard .nm{font-weight:600;font-size:14.5px;line-height:1.25;word-break:break-word}
+.pcard dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0;font-size:12.5px}
+.pcard dt{color:var(--ink-3)} .pcard dd{margin:0;font-family:var(--f-mono);text-align:right;overflow:hidden;text-overflow:ellipsis}
+.pcard .acts{display:flex;gap:6px;flex-wrap:wrap}
+.pcard .acts .btn{flex:1}
+table.plain td{padding:4px 12px}
+table.plain td .btn.small{padding:4px 9px}
+table.plain td.name{min-width:200px}
+tr.selr td{background:var(--accent-soft)!important}
+.erow{padding:8px 18px!important}
+.flag{font-size:12px;background:var(--warn-bg);color:var(--ink);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);border-radius:8px;padding:6px 9px}
+.flag b{color:var(--warn)}
+.ck{width:18px;height:18px;accent-color:var(--accent);margin-top:2px;flex:none}
+
+/* link de cadastro */
+.linkbox{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:12px;padding:10px 12px}
+.linkbox code{flex:1;min-width:0;font-family:var(--f-mono);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+
+/* envio */
+.erow{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line-2)}
+.erow:last-child{border-bottom:0}
+.erow .who .nm{font-weight:600}
+.erow .who .sub{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);margin-top:2px}
+.erow .done{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.erow input{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:6px 9px;width:130px;font-family:var(--f-mono)}
+@media (max-width:820px){.erow{grid-template-columns:1fr}.erow .done{justify-content:flex-start}}
+.dest{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.dest b{color:var(--ink);font-family:var(--f-mono);font-weight:500}
+
+/* compositor de e-mail */
+.compose{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.c-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 14px;background:var(--ink);color:var(--bg);font-weight:600;font-size:13px}
+.c-count{font-family:var(--f-mono);font-weight:500;font-size:12px;opacity:.85}
+.c-row{display:flex;align-items:flex-start;gap:10px;padding:6px 14px;border-bottom:1px solid var(--line-2);min-height:40px}
+.c-row>label{width:58px;flex:none;color:var(--ink-3);font-size:13px;padding-top:6px}
+.c-from{padding-top:6px;font-size:13px;color:var(--ink-2);min-width:0}
+.c-from b{color:var(--ink);font-weight:500}
+.c-input{flex:1;min-width:0;border:0;background:transparent;padding:6px 0;font-weight:500}
+.c-input:focus{outline:none}
+.chipbox{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:3px 0}
+.chipbox input{flex:1;min-width:180px;border:0;background:transparent;padding:4px 0}
+.chipbox input:focus{outline:none}
+.mchip{display:inline-flex;align-items:center;gap:4px;background:var(--accent-soft);color:var(--ink);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);border-radius:999px;padding:2px 4px 2px 10px;font-size:12.5px;max-width:100%}
+.mchip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mchip button{border:0;background:transparent;width:18px;height:18px;border-radius:50%;line-height:1;color:var(--ink-2);padding:0}
+.mchip button:hover{background:color-mix(in srgb,var(--ink) 12%,transparent)}
+.mchip.bad{background:var(--crit-bg);border-color:var(--crit)}
+.c-body{padding:10px 14px;display:flex;flex-direction:column;gap:8px}
+#cClose{min-height:24px}
+.c-body textarea{border:0;background:transparent;resize:vertical;width:100%;padding:0;line-height:1.5}
+.c-body textarea:focus{outline:none}
+.c-preview{border:1px dashed var(--line);border-radius:10px;overflow:auto;max-height:260px;background:var(--surface-2)}
+.c-preview table{font-size:12.5px}
+.c-preview td,.c-preview th{padding:4px 10px}
+.c-preview .none{padding:18px;text-align:center;color:var(--ink-3);font-size:13px}
+.c-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 14px;border-top:1px solid var(--line-2);background:var(--surface-2)}
+tr.esel td{background:color-mix(in srgb,var(--accent-soft) 70%,transparent)}
+
+/* configurações */
+h3.sub{margin:0;font-family:var(--f-display);font-weight:700;font-size:16px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.asst-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.asst-row{display:grid;grid-template-columns:32px minmax(0,1fr) minmax(0,1.3fr) 100px auto;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line-2)}
+.asst-row:last-child{border-bottom:0}
+.asst-av{width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:600;font-size:12px}
+.asst-row .em{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis}
+.asst-empty{padding:14px;color:var(--ink-3);font-size:13px;text-align:center}
+.asst-add{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) 150px auto;gap:10px;align-items:end}
+@media (max-width:640px){.asst-add{grid-template-columns:1fr}.asst-row{grid-template-columns:32px minmax(0,1fr) auto}.asst-row .em{grid-column:2}}
+.c-from{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-top:0!important}
+.c-from .selwrap select{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:6px 34px 6px 10px;font-weight:500;min-width:240px;max-width:100%}
+.c-from .selwrap select:focus{outline:none;border-color:var(--accent)}
+.c-from .ccme{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.c-from .ccme input{width:15px;height:15px;accent-color:var(--accent)}
+
+.logo-box{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.logo-prev{min-width:200px;height:64px;border:1px dashed var(--line);border-radius:10px;background:#fff;display:grid;place-items:center;padding:8px 14px;color:#77838F;font-size:12px}
+.logo-prev img{max-height:44px;max-width:220px;display:block}
+
+/* aba formulário */
+.formgrid{display:grid;grid-template-columns:minmax(0,480px) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:980px){.formgrid{grid-template-columns:1fr}}
+.formprev{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg)}
+.fp-h{font-size:12px;color:var(--ink-2);padding:8px 12px;border-bottom:1px solid var(--line-2);background:var(--surface-2)}
+#formFrame{width:100%;height:860px;border:0;display:block;background:var(--bg)}
+.feed{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.feed-h{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line-2);background:var(--surface-2)}
+.frow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:9px 14px;border-bottom:1px solid var(--line-2);align-items:center}
+.frow:last-child{border-bottom:0}
+.frow .nm{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .sub{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);grid-column:1}
+.frow .tags{display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap;grid-row:1/3;grid-column:2}
+.frow.new{animation:flash 2.4s ease}
+@keyframes flash{0%{background:var(--ok-bg)}100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.frow.new{animation:none}}
+
+/* formulários */
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field label{font-size:12px;font-weight:500;color:var(--ink-2);letter-spacing:.02em}
+.field input,.field textarea,.field select{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:10px 12px;width:100%;transition:border-color .15s,box-shadow .15s}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.selwrap{position:relative}
+.selwrap select{appearance:none;-webkit-appearance:none;padding-right:38px;cursor:pointer}
+.selwrap select:invalid{color:var(--ink-3)}
+.selwrap select option{color:var(--ink)}
+.selwrap svg{position:absolute;right:13px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--ink-2)}
+.field select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.field.bad select{border-color:var(--crit)}
+.field .err{font-size:12px;color:var(--crit);min-height:16px}
+.field.bad input{border-color:var(--crit)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:640px){.grid2{grid-template-columns:1fr}}
+.hint{font-size:12px;color:var(--ink-3)}
+details.guide{border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+details.guide summary{cursor:pointer;padding:12px 14px;font-weight:600}
+details.guide .gb{padding:0 14px 14px;font-size:13px;color:var(--ink-2)}
+details.guide ol{padding-left:18px;margin:6px 0} details.guide li{margin:4px 0}
+pre.code{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;font-family:var(--f-mono);font-size:11.5px;overflow:auto;max-height:280px;white-space:pre;color:var(--ink)}
+code.k{font-family:var(--f-mono);font-size:12px;background:var(--surface);border:1px solid var(--line-2);padding:0 5px;border-radius:5px;color:var(--ink)}
+
+/* skeleton */
+.sk{position:relative;overflow:hidden;background:var(--surface-2);border-radius:8px}
+.sk::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--surface) 70%,transparent),transparent);animation:shim 1.3s infinite}
+@keyframes shim{to{transform:translateX(100%)}}
+@media (prefers-reduced-motion:reduce){.sk::after{animation:none}}
+
+/* folha lateral e modal */
+.scrim{position:fixed;inset:0;background:rgba(8,14,20,.45);z-index:40;backdrop-filter:blur(2px)}
+.sheet{position:fixed;top:0;right:0;bottom:0;width:min(520px,100%);background:var(--bg);z-index:41;overflow:auto;padding:calc(18px + env(safe-area-inset-top,0px)) 20px calc(24px + env(safe-area-inset-bottom,0px));border-left:1px solid var(--line);box-shadow:-10px 0 30px rgba(0,0,0,.15);display:flex;flex-direction:column;gap:14px}
+.sheet-h{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sheet-h h3{margin:0;font-family:var(--f-display);font-size:24px;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:13px;z-index:60;box-shadow:var(--shadow);max-width:calc(100% - 32px)}
+.banner{margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--warn-bg);border:1px dashed var(--warn);border-radius:12px;padding:9px 13px;font-size:13px}
+.banner strong{color:var(--warn)}
+.confirm{display:inline-flex;gap:4px;align-items:center;font-size:12px}
+
+/* página pública de cadastro */
+.pub-card h2.one{white-space:nowrap;font-size:34px;letter-spacing:.01em;overflow:hidden;line-height:1.2;padding-top:2px}
+.pub-card .field label{font-size:15px;font-weight:600;color:var(--ink);letter-spacing:.01em}
+.pub-card .field input,.pub-card .field select{font-size:16px;padding:12px 14px}
+.pub-card .field .err{min-height:14px;font-size:12.5px}
+.reveal{animation:rv .25s ease}
+@keyframes rv{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.reveal{animation:none}}
+.card-number-guide{border:1px solid var(--line);border-radius:14px;background:var(--surface-2);padding:12px;display:flex;flex-direction:column;gap:9px}
+.card-number-guide .guide-title{font-weight:600;font-size:13px}
+.lenel-example{height:150px;border-radius:13px;background:linear-gradient(135deg,#11316e,#0f4c81);color:#fff;position:relative;overflow:hidden;padding:16px}
+.lenel-example:before{content:"LENEL";font-family:var(--f-display);font-weight:700;font-size:23px;letter-spacing:.12em;position:absolute;left:16px;top:13px}
+.lenel-example .fake-photo{position:absolute;left:16px;bottom:15px;width:42px;height:52px;border-radius:7px;background:rgba(255,255,255,.20)}
+.lenel-example .fake-lines{position:absolute;left:68px;bottom:21px;width:105px;height:33px;border-radius:5px;background:rgba(255,255,255,.14)}
+.lenel-example .number-area{position:absolute;right:13px;bottom:13px;padding:7px 9px;border:2px solid #ffd65a;border-radius:8px;background:rgba(0,0,0,.30);font-family:var(--f-mono);font-weight:700;font-size:14px;letter-spacing:.08em}
+.lenel-example .arrow{position:absolute;right:18px;bottom:51px;color:#ffe071;font-weight:700;font-size:12px}
+.photo-pick{border:1px dashed var(--line);border-radius:12px;background:var(--surface-2);padding:12px;display:flex;gap:12px;align-items:center}
+.photo-pick .photo-prev{width:70px;height:70px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;overflow:hidden;flex:none;color:var(--ink-3)}
+.photo-pick .photo-prev img{width:100%;height:100%;object-fit:cover}.photo-pick input[type=file]{display:none}
+body.embed .pub{padding-top:12px;min-height:auto}
+body.embed{background:transparent}
+body.embed::before{display:none}
+.pub{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:calc(28px + env(safe-area-inset-top,0px)) 16px 40px}
+.pub-card{width:100%;max-width:480px;background:var(--glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--glass-line);border-radius:20px;box-shadow:var(--shadow);padding:26px 24px;display:flex;flex-direction:column;gap:16px}
+.pub-card h2{margin:0;font-family:var(--f-display);font-weight:700;font-size:32px;line-height:1;text-transform:uppercase;letter-spacing:.02em;text-wrap:balance}
+.pub-card .lead{margin:0;color:var(--ink-2);font-size:13.5px}
+.cardart{height:120px;border-radius:14px;background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 55%,var(--ok)));color:var(--accent-ink);padding:14px 16px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.cardart::after{content:"";position:absolute;right:-30px;top:-40px;width:160px;height:160px;border-radius:50%;border:22px solid rgba(255,255,255,.12)}
+.cardart .chipi{width:34px;height:26px;border-radius:5px;background:rgba(255,255,255,.35)}
+.cardart .cn{font-family:var(--f-mono);font-size:15px;letter-spacing:.14em}
+.cardart.logo{background:#11316e;padding:0;display:grid;place-items:center}
+.cardart.logo::after{display:none}
+.cardart.logo img{width:100%;height:100%;object-fit:contain;display:block}
+.cardart .cl{font-family:var(--f-display);font-size:13px;letter-spacing:.14em;text-transform:uppercase;opacity:.9}
+.okmark{width:56px;height:56px;border-radius:50%;background:var(--ok-bg);color:var(--ok);display:grid;place-items:center}
+.lock{min-height:100vh;display:grid;place-items:center;padding:16px}
+</style>
+</head>
+<body>
+
+<!-- ======================= VIEW: ADMIN ======================= -->
+<div id="admin" hidden>
+  <header class="nav">
+    <div class="wrap nav-in">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M7 10h4M7 14h7"/><circle cx="17" cy="11" r="1.6" fill="currentColor"/></svg>
+        </div>
+        <h1>Controle Lenel</h1>
+        <span class="live" id="liveTag"><span class="dot"></span><span id="liveTxt">CONECTANDO</span></span>
+      </div>
+      <nav class="tabs" id="tabs" aria-label="Seções">
+        <button class="tab" data-tab="banco">Banco de dados</button>
+        <button class="tab" data-tab="form">Formulário <span class="cnt z" id="cntForm">0</span></button>
+        <button class="tab" data-tab="pedidos">Pedidos de cartão <span class="cnt z" id="cntPed">0</span></button>
+        <button class="tab" data-tab="envio">Envio ao cadastro <span class="cnt z" id="cntEnv">0</span></button>
+        <button class="tab" data-tab="config">Configurações</button>
+      </nav>
+      <button class="iconbtn" id="themeBtn" title="Alternar tema" aria-label="Alternar tema">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap" style="padding-block:0 48px">
+    <div class="banner" id="errBanner" hidden style="background:var(--crit-bg);border-color:var(--crit)"><strong style="color:var(--crit)">Sem acesso ao banco.</strong><span id="errText"></span><button class="btn small" id="errRetry">Tentar de novo</button></div>
+    <div class="banner" id="demoBanner" hidden>
+      <strong>Modo demonstração.</strong>
+      <span>Os dados ficam só neste navegador e os registros de exemplo não são reais. Preencha <code class="k">SUPABASE_ANON_KEY</code> no topo do script para usar o banco compartilhado.</span>
+    </div>
+
+    <!-- Bento -->
+    <section class="bento" id="bento" aria-label="Resumo">
+      <div class="cell big">
+        <div style="min-width:0">
+          <div class="l"><i style="background:var(--crit)"></i>Pedidos pendentes</div>
+          <div class="row"><span class="v" id="kPend">–</span><span class="s" id="kPendSub"></span></div>
+        </div>
+        <div class="toolbar">
+          <button class="btn small primary" data-go="pedidos">Ver pedidos</button>
+          <button class="btn small" id="copyLinkTop">Copiar link</button>
+        </div>
+      </div>
+      <div class="cell"><div class="l"><i style="background:var(--accent)"></i>No banco</div><div class="row"><span class="v" id="kBanco">–</span><span class="s" id="kBancoSub"></span></div></div>
+      <div class="cell"><div class="l"><i style="background:var(--warn)"></i>Aguardando cartão</div><div class="row"><span class="v" id="kAguard">–</span></div></div>
+      <div class="cell"><div class="l"><i style="background:var(--ok)"></i>E-mails hoje</div><div class="row"><span class="v" id="kMail">–</span></div></div>
+      <div class="cell"><div class="l"><i style="background:var(--crit)"></i>Falhas de envio</div><div class="row"><span class="v" id="kFail">–</span></div></div>
+    </section>
+
+    <!-- ===== Aba: Banco ===== -->
+    <section class="panel" data-pane="banco">
+      <div class="ph">
+        <div>
+          <h2>Banco de dados <span class="c" id="bancoCount"></span></h2>
+          <p>Todo mundo que preencheu o formulário. Quem pediu cartão fica como pendente até o setor devolver o número.</p>
+        </div>
+        <div class="toolbar">
+          <div class="chips" id="bancoChips"><button class="chip on" data-bf="">Todos</button><button class="chip" data-bf="com">Com cartão</button><button class="chip" data-bf="pend">Pendentes</button><button class="chip" data-bf="sem">Sem cartão</button></div>
+          <input class="search" id="bancoSearch" type="search" placeholder="Buscar nome, CPF, EXT ou cartão">
+          <button class="btn primary" id="newPerson">+ Novo cadastro</button>
+          <button class="btn" id="pasteBtn">Colar lista</button>
+          <button class="btn" id="exportBtn">Exportar Excel</button>
+        </div>
+      </div>
+      <div class="tablebox">
+        <table>
+          <thead><tr><th>Nome completo</th><th>CPF</th><th>EXT</th><th>Nº do cartão</th><th>Atualizado</th><th class="r">Ações</th></tr></thead>
+          <tbody id="bancoBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== Aba: Formulário ===== -->
+    <section class="panel" data-pane="form" hidden>
+      <div class="ph">
+        <div>
+          <h2>Formulário de cadastro</h2>
+          <p>Mande o link para o pessoal. Quem abrir vê só o formulário, nunca este painel. Cada envio aparece aqui ao lado na hora.</p>
+        </div>
+      </div>
+      <div class="pb" style="display:flex;flex-direction:column;gap:14px">
+        <div class="linkbox">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+          <code id="formLink"></code>
+          <button class="btn small primary" id="copyLink">Copiar link</button>
+          <a class="btn small" id="openLink" target="_blank" rel="noopener">Abrir em nova aba</a>
+        </div>
+        <div class="banner" id="linkWarn" hidden style="margin-top:0"><strong>Link ainda local.</strong><span>Enquanto o app estiver só no seu computador, esse link não abre para os outros. Depois de subir no GitHub Pages, ele fica certo sozinho.</span></div>
+        <div class="formgrid">
+          <div class="formprev">
+            <div class="fp-h">Prévia do formulário · você também pode preencher por alguém aqui</div>
+            <iframe id="formFrame" title="Formulário de cadastro" loading="lazy"></iframe>
+          </div>
+          <div class="feed">
+            <div class="feed-h"><span class="live"><span class="dot"></span>CHEGANDO AGORA</span><span class="hint" id="feedCount"></span></div>
+            <div id="feedList"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Aba: Pedidos ===== -->
+    <section class="panel" data-pane="pedidos" hidden>
+      <div class="ph">
+        <div>
+          <h2>Pedidos de cartão <span class="c" id="pedCount"></span></h2>
+          <p>Pedidos que chegaram pelo formulário: quem nunca teve cartão ou pediu 2ª via. Essas pessoas já estão no Banco de dados, marcadas como pendentes.</p>
+        </div>
+        <div class="chips" id="pedChips">
+          <button class="chip on" data-f="pendente">Pendentes <b id="cP">0</b></button>
+          <button class="chip" data-f="recusado">Recusados <b id="cR">0</b></button>
+          <button class="chip" data-f="todos">Todos <b id="cT">0</b></button>
+        </div>
+      </div>
+      <div class="pb" style="display:flex;flex-direction:column;gap:14px">
+        <div class="toolbar">
+          <input class="search" id="pedSearch" type="search" placeholder="Buscar nome, CPF ou EXT">
+          <div class="toolbar" id="bulkBar" hidden>
+            <span class="hint" id="bulkTxt"></span>
+            <button class="btn small ok" id="bulkApprove">Aprovar selecionados (1 e-mail com a lista)</button>
+            <button class="btn small danger" id="bulkReject">Recusar selecionados</button>
+            <button class="btn small danger" id="bulkDel">Excluir selecionados</button>
+            <button class="btn small ghost" id="bulkClear">Limpar seleção</button>
+          </div>
+        </div>
+      </div>
+      <div class="tablebox" style="max-height:70vh;border-top:1px solid var(--line-2)">
+        <table class="plain">
+          <thead><tr>
+            <th style="width:36px"><input type="checkbox" class="ck" id="selAll" aria-label="Selecionar todos os pendentes visíveis"></th>
+            <th>Nome completo</th><th>CPF</th><th>EXT</th><th>Motivo</th><th>Recebido</th><th>Aviso</th><th>Status</th><th class="r">Ações</th>
+          </tr></thead>
+          <tbody id="pedList"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== Aba: Envio ===== -->
+    <section class="panel" data-pane="envio" hidden>
+      <div class="ph">
+        <div>
+          <h2>Envio ao cadastro <span class="c" id="envCount"></span></h2>
+          <p>Marque as pessoas, confira o e-mail e envie para o setor. Quando o setor devolver os números dos cartões, use “Colar números do setor”.</p>
+        </div>
+      </div>
+
+      <div class="pb">
+        <div class="compose" id="compose">
+          <div class="c-head"><span>Nova mensagem</span><span class="c-count" id="cCount">0 pessoas no e-mail</span></div>
+          <div class="c-row"><label for="cFromSel">De</label><div class="c-from">
+            <div class="selwrap"><select id="cFromSel" aria-label="Quem está fazendo o pedido"></select><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div>
+            <label class="ccme"><input type="checkbox" id="cCcMe" checked> colocar o responsável em cópia</label>
+            <span id="cFrom"></span>
+          </div></div>
+          <div class="c-row"><label for="toIn">Para</label><div class="chipbox" data-list="to"><input id="toIn" type="email" placeholder="Digite o e-mail e aperte Enter" autocomplete="email"></div></div>
+          <div class="c-row"><label for="ccIn">Cc</label><div class="chipbox" data-list="cc"><input id="ccIn" type="email" placeholder="Cópia (opcional)" autocomplete="email"></div></div>
+          <div class="c-row"><label for="cSubject">Assunto</label><input id="cSubject" class="c-input"></div>
+          <div class="c-body">
+            <textarea id="cIntro" rows="3" aria-label="Mensagem"></textarea>
+            <div class="c-preview" id="cPreview"></div>
+            <textarea id="cClose" rows="1" aria-label="Encerramento"></textarea>
+            <div id="cSign" style="font-weight:500;margin-top:-6px;line-height:1.4"></div>
+          </div>
+          <div class="c-foot">
+            <button class="btn primary" id="cSend">Enviar pela minha conta</button>
+            <button class="btn" id="cOutlook" title="Abre o Outlook ou o app de e-mail do computador já preenchido">Abrir no Outlook</button>
+            <button class="btn" id="cGmail" title="Abre o Gmail já preenchido">Abrir no Gmail</button>
+            <button class="btn ghost" id="cCopy">Copiar e-mail</button>
+            <button class="btn ghost" id="cTest" title="Abre o Gmail com o e-mail indo só para você">Testar (só para mim)</button>
+            <span style="flex:1"></span>
+            <button class="btn ghost small" id="cMark" title="Use depois de enviar pelo Outlook ou Gmail">Marcar como enviados</button>
+            <button class="btn ghost small" id="cSaveDef" title="Salva Para, Cc e Assunto como padrão">Salvar como padrão</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pb toolbar" style="padding-top:0;padding-bottom:12px">
+        <input class="search" id="envSearch" type="search" placeholder="Buscar nome, CPF ou EXT">
+        <div class="chips" id="envChips">
+          <button class="chip" data-es="nao">Marcar não enviados</button>
+          <button class="chip" data-es="todos">Marcar todos</button>
+          <button class="chip" data-es="nenhum">Desmarcar</button>
+        </div>
+        <span style="flex:1"></span>
+        <button class="btn small primary" id="pasteCardsBtn">Colar números do setor</button>
+      </div>
+      <div class="tablebox" style="max-height:70vh;border-top:1px solid var(--line-2)">
+        <table class="plain">
+          <thead><tr><th style="width:36px"><input type="checkbox" class="ck" id="envAll" aria-label="Marcar todos visíveis"></th><th>Nome completo</th><th>CPF</th><th>EXT</th><th>Motivo</th><th>Aprovado</th><th>E-mail ao setor</th><th>Nº do cartão</th><th class="r"></th></tr></thead>
+          <tbody id="envList"></tbody>
+        </table>
+      </div>
+      <div class="ph" style="border-top:1px solid var(--line-2)">
+        <h2 style="font-size:16px">Concluídos recentes <span class="c" id="doneCount"></span></h2>
+      </div>
+      <div class="tablebox" style="max-height:320px">
+        <table>
+          <thead><tr><th>Nome</th><th>CPF</th><th>EXT</th><th>Cartão</th><th>Concluído</th><th class="r"></th></tr></thead>
+          <tbody id="doneBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== Aba: Configurações ===== -->
+    <section class="panel" data-pane="config" hidden>
+      <div class="ph">
+        <div>
+          <h2>Configurações</h2>
+          <p>Salvo no banco: vale para todos que usam o app.</p>
+        </div>
+      </div>
+      <form class="pb" id="cfgForm" style="display:flex;flex-direction:column;gap:14px">
+        <h3 class="sub">Para onde vai o e-mail</h3>
+        <div class="grid2">
+          <div class="field"><label for="cfgTo">E-mail do setor (security)</label><input id="cfgTo" type="text" placeholder="security@empresa.com" autocomplete="off"></div>
+          <div class="field"><label for="cfgCc">Cópia fixa (opcional)</label><input id="cfgCc" type="text" placeholder="coordenacao@empresa.com" autocomplete="off"></div>
+        </div>
+        <span class="hint" style="margin-top:-8px">Esses e-mails já aparecem preenchidos em Para e Cc na tela de envio. Para mais de um, separe com vírgula.</span>
+        <div class="toolbar"><button class="btn primary" type="submit">Salvar</button></div>
+
+        <h3 class="sub" style="margin-top:8px">Responsáveis pelo pedido</h3>
+        <p class="hint" style="margin:-8px 0 0">Assistentes e analistas que podem pedir cartões ao setor. Adicione quantos precisar. Na tela de envio você escolhe um deles no campo “De”: nome e cargo vão na assinatura do e-mail, e o e-mail dele vai em cópia.</p>
+        <div id="asstList" class="asst-list"></div>
+        <div class="asst-add">
+          <div class="field"><label for="asstNome">Nome</label><input id="asstNome" placeholder="Nome completo" autocomplete="off"></div>
+          <div class="field"><label for="asstEmail">E-mail</label><input id="asstEmail" type="email" placeholder="nome@empresa.com" autocomplete="off"></div>
+          <div class="field"><label for="asstCargo">Cargo</label><div class="selwrap"><select id="asstCargo"><option>Assistente</option><option>Analista</option></select><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div></div>
+          <button class="btn" type="button" id="asstAdd">+ Adicionar</button>
+        </div>
+
+        <details class="guide" style="margin-top:8px">
+          <summary>Avançado: enviar direto do app, envio automático e banco de dados</summary>
+          <div class="gb" style="display:flex;flex-direction:column;gap:12px">
+            <p style="margin:0">Só é preciso se você quiser usar o botão <b>Enviar pela minha conta</b>. Para “Abrir no Outlook” ou “Abrir no Gmail”, pode deixar em branco.</p>
+            <div class="grid2">
+              <div class="field"><label for="cfgService">EmailJS · Service ID</label><input id="cfgService" type="text" placeholder="service_xxxxxxx" autocomplete="off"></div>
+              <div class="field"><label for="cfgTemplate">EmailJS · Template ID</label><input id="cfgTemplate" type="text" placeholder="template_xxxxxxx" autocomplete="off"></div>
+            </div>
+            <div class="field"><label for="cfgKey">EmailJS · Public Key</label><input id="cfgKey" type="text" placeholder="xXxXxXxXxXxXxXxX" autocomplete="off"></div>
+            <ol style="margin:0">
+              <li>Crie uma conta em <b>emailjs.com</b> e em <i>Email Services</i> conecte o Gmail ou Outlook que vai enviar. Copie o <b>Service ID</b>.</li>
+              <li>Em <i>Email Templates</i> crie um modelo com: <b>To Email</b> = <code class="k">{{to_email}}</code>, <b>CC</b> = <code class="k">{{cc_email}}</code>, <b>Reply To</b> = <code class="k">{{reply_to}}</code>, <b>From Name</b> = <code class="k">{{from_name}}</code>, <b>Subject</b> = <code class="k">{{subject}}</code> e no corpo apenas <code class="k">{{{mensagem_html}}}</code>. Copie o <b>Template ID</b>.</li>
+              <li>Em <i>Account → General</i> copie a <b>Public Key</b>, cole acima e salve.</li>
+            </ol>
+            <p class="hint" style="margin:0">O plano grátis do EmailJS envia até 200 e-mails por mês.</p>
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="cfgAuto" class="ck"> Enviar também um e-mail automático a cada aprovação (sem passar pela tela de envio)</label>
+            <div class="field"><label for="cfgSubject">Assunto do e-mail automático</label><input id="cfgSubject" type="text" placeholder="Pedido de cartão Lenel — {nome}"><span class="hint">Use {nome}, {cpf} e {ext} para preencher automaticamente.</span></div>
+            <div class="toolbar"><button class="btn primary" type="submit">Salvar</button><button class="btn" type="button" id="testMail">Enviar e-mail de teste</button><span class="pill" id="mailState"></span></div>
+            <hr style="border:0;border-top:1px solid var(--line);margin:4px 0">
+            <p style="margin:0"><b>Criar as tabelas no Supabase</b> (uma vez só): no Supabase abra <b>SQL Editor</b>, cole e execute:</p>
+            <pre class="code" id="sqlBox"></pre>
+            <div><button class="btn small" type="button" id="copySql">Copiar SQL</button></div>
+          </div>
+        </details>
+      </form>
+    </section>
+  </main>
+</div>
+
+<!-- ======================= VIEW: CADASTRO PÚBLICO ======================= -->
+<div id="pub" class="pub" hidden>
+  <div class="pub-card" id="pubCard">
+    <div class="cardart" aria-hidden="true">
+      <div style="display:flex;justify-content:space-between;align-items:center"><div class="chipi"></div><span class="cl">Cartão Lenel</span></div>
+      <div><div class="cn" id="artCpf">•••.•••.•••-••</div><div class="cl" id="artName">Seu nome aqui</div></div>
+    </div>
+    <div>
+      <h2 class="one">Cadastro do cartão Lenel</h2>
+      <p class="lead" style="margin-top:6px">Preencha seus dados e diga se já tem cartão. Se precisa de um novo, seu pedido vai para aprovação.</p>
+    </div>
+    <form id="pubForm" novalidate style="display:flex;flex-direction:column;gap:10px">
+      <div class="field" id="fNome"><label for="pNome">Nome completo</label><input id="pNome" autocomplete="name" placeholder="Como está no documento"><span class="err"></span></div>
+      <div class="field" id="fCpf"><label for="pCpf">CPF</label><input id="pCpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14"><span class="err"></span></div>
+      <div class="field" id="fExt"><label for="pExt">EXT</label><input id="pExt" autocomplete="off" placeholder="Seu login / EXT"><span class="err"></span></div>
+      <div class="field" id="fMotivo"><label for="pMotivo">Situação do cartão</label>
+        <div class="selwrap">
+          <select id="pMotivo" required>
+            <option value="" disabled selected hidden>Selecione</option>
+            <option>Tenho cartão</option>
+            <option>Nunca tive cartão</option>
+            <option>2ª via de cartão</option>
+          </select>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </div><span class="err"></span></div>
+      <div id="cardExtra" class="reveal" hidden style="display:none;flex-direction:column;gap:10px">
+        <div class="field" id="fCartao"><label for="pCartao">Número do Cartão Lenel</label><input id="pCartao" inputmode="numeric" autocomplete="off" placeholder="Digite a numeração do seu cartão"><span class="err"></span></div>
+        <div class="card-number-guide"><div class="guide-title">Onde encontro a numeração?</div>
+          <div class="lenel-example" role="img" aria-label="Ilustração indicando onde procurar a numeração do Cartão Lenel"><div class="fake-photo"></div><div class="fake-lines"></div><div class="arrow">↓ PROCURE AQUI</div><div class="number-area">0000000000</div></div>
+          <div class="hint">Procure no seu cartão a sequência numérica impressa. A imagem acima é uma ilustração para ajudar a localizar o número.</div>
+        </div>
+      </div>
+      <div class="field" id="fSelfie"><label>Selfie para compor o cadastro</label>
+        <div class="photo-pick"><div class="photo-prev" id="selfiePrev">FOTO</div><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:13px">Envie uma foto do rosto</div><div class="hint" style="margin:2px 0 8px">Foto de frente, com boa iluminação e sem filtros.</div><label class="btn small" for="pSelfie">Tirar / escolher selfie</label><input id="pSelfie" type="file" accept="image/*" capture="user"></div></div><span class="err"></span>
+      </div>
+      <button class="btn primary" type="submit" id="pubSend" style="padding:12px;font-size:14px">Enviar</button>
+      <p class="hint" style="margin:0;text-align:center">Seus dados são usados apenas para o controle de acesso.</p>
+    </form>
+  </div>
+  <div class="pub-card" id="pubDone" hidden style="align-items:center;text-align:center">
+    <div class="okmark"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <h2 id="doneTitle">Enviado</h2>
+    <p class="lead" id="doneText"></p>
+    <button class="btn" id="pubAgain">Cadastrar outra pessoa</button>
+  </div>
+</div>
+
+<!-- ======================= VIEW: BLOQUEIO ======================= -->
+<div id="lock" class="lock" hidden>
+  <form class="pub-card" id="lockForm" style="max-width:360px">
+    <h2 style="font-size:26px">Controle Lenel</h2>
+    <p class="lead">Digite o PIN de acesso ao painel.</p>
+    <div class="field"><label for="pinIn">PIN</label><input id="pinIn" type="password" inputmode="numeric" autocomplete="off"><span class="err" id="pinErr"></span></div>
+    <button class="btn primary" type="submit">Entrar</button>
+  </form>
+</div>
+
+<div id="sheetRoot"></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ================================================================
+   CONFIGURAÇÃO — preencha antes de publicar no GitHub Pages
+   ================================================================ */
+const CONFIG = {
+  SUPABASE_URL: "https://cjentqthseecgizptyqe.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqZW50cXRoc2VlY2dpenB0eXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxMDY0MTIsImV4cCI6MjEwNTY4MjQxMn0.UWIWzQIEZOWQ2RPOyPmsD3Jo2A6G90W9Rwl1rtEQZv0",      // cole aqui a anon key (Project Settings → API). Vazio = modo demonstração
+  ADMIN_PIN: "",
+  FORM_URL: "https://cartao-lenel-kn.netlify.app",   // link que o pessoal recebe (só formulário)
+  FORM_ONLY_HOST: "cartao-lenel-kn.netlify.app"      // neste endereço o app mostra apenas o formulário               // opcional: PIN para abrir o painel (o formulário público não pede PIN)
+};
+
+/* ================================================================ utilidades */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const onlyDigits = v => String(v ?? "").replace(/\D/g, "");
+const splitMails = v => {
+  const txt = String(v ?? "");
+  const found = txt.match(/[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g);
+  if (found) return [...new Set(found.map(m => m.toLowerCase()))];
+  return txt.split(/[,;\s]+/).map(x => x.trim().replace(/^["<]+|[">]+$/g, "")).filter(Boolean);
+};
+const isMail = m => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m);
+const fmtCpf = v => { const d = onlyDigits(v).padStart(11, "0").slice(-11); return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`; };
+const maskCpf = v => { const d = onlyDigits(v).slice(0, 11); let o = d.slice(0,3); if (d.length > 3) o += "." + d.slice(3,6); if (d.length > 6) o += "." + d.slice(6,9); if (d.length > 9) o += "-" + d.slice(9); return o; };
+function cpfValido(v){
+  const d = onlyDigits(v);
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  const calc = n => { let s = 0; for (let i = 0; i < n; i++) s += +d[i] * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
+  return calc(9) === +d[9] && calc(10) === +d[10];
+}
+const nowIso = () => new Date().toISOString();
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now().toString(36) + Math.random().toString(36).slice(2));
+const dt = iso => iso ? new Date(iso).toLocaleString("pt-BR", {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"}) : "–";
+const dtFull = iso => iso ? new Date(iso).toLocaleString("pt-BR", {day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit"}) : "–";
+function ago(iso){
+  if (!iso) return "–";
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (m < 1) return "agora"; if (m < 60) return `há ${m} min`;
+  const h = Math.round(m / 60); if (h < 24) return `há ${h} h`;
+  return dt(iso);
+}
+const isToday = iso => iso && new Date(iso).toDateString() === new Date().toDateString();
+const normName = s => String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase().replace(/(^|\s)(\S)/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(Da|De|Do|Das|Dos|E)\b/g, w => w.toLowerCase());
+let toastT;
+function toast(msg, ms = 2600){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, ms); }
+async function copyText(txt, okMsg = "Copiado"){
+  try { await navigator.clipboard.writeText(txt); toast(okMsg); }
+  catch { const ta = document.createElement("textarea"); ta.value = txt; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); toast(okMsg); } catch { toast("Selecione e copie manualmente"); } ta.remove(); }
+}
+const M = window.Motion;
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function enter(sel, opts = {}){
+  if (!M || reduce) return;
+  const els = typeof sel === "string" ? $$(sel) : sel;
+  if (!els.length) return;
+  try { M.animate(els, { opacity: [0, 1], y: [opts.y ?? 10, 0] }, { duration: .38, delay: M.stagger(opts.step ?? .04), easing: [.22, .8, .3, 1] }); } catch {}
+}
+
+/* ================================================================ armazenamento */
+const T = { cartoes: "lenel_cartoes", pedidos: "lenel_pedidos", config: "lenel_config" };
+const DEMO = !CONFIG.SUPABASE_ANON_KEY;
+const LIB_FAIL = !DEMO && !window.supabase;
+
+class SupaStore {
+  constructor(){ this.sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY); }
+  async list(t){ const { data, error } = await this.sb.from(t).select("*").order(t === T.config ? "key" : "created_at", { ascending: false }).limit(5000); if (error) throw error; return data; }
+  async insert(t, row){ const { data, error } = await this.sb.from(t).insert(row).select().single(); if (error) throw error; return data; }
+  async update(t, id, patch){ const { data, error } = await this.sb.from(t).update(patch).eq("id", id).select().single(); if (error) throw error; return data; }
+  async upsert(t, rows, onConflict){ const { error } = await this.sb.from(t).upsert(rows, { onConflict }); if (error) throw error; }
+  async updateMany(t, ids, patch){ for (let i = 0; i < ids.length; i += 200) { const { error } = await this.sb.from(t).update(patch).in("id", ids.slice(i, i + 200)); if (error) throw error; } }
+  async remove(t, id){ const { error } = await this.sb.from(t).delete().eq("id", id); if (error) throw error; }
+  async findByCpf(t, cpf){ const { data, error } = await this.sb.from(t).select("*").eq("cpf", cpf).limit(20); if (error) throw error; return data; }
+  subscribe(cb){
+    try {
+      this.sb.channel("lenel-live")
+        .on("postgres_changes", { event: "*", schema: "public", table: T.pedidos }, p => cb(T.pedidos, p))
+        .on("postgres_changes", { event: "*", schema: "public", table: T.cartoes }, p => cb(T.cartoes, p))
+        .on("postgres_changes", { event: "*", schema: "public", table: T.config }, p => cb(T.config, p))
+        .subscribe();
+    } catch {}
+  }
+}
+
+class LocalStore {
+  constructor(){ this.key = "lenel_demo_v3"; this.db = this.load(); if (!this.db) { this.db = seedDemo(); this.save(); } }
+  load(){ try { return JSON.parse(localStorage.getItem(this.key)); } catch { return null; } }
+  save(){ try { localStorage.setItem(this.key, JSON.stringify(this.db)); } catch {} }
+  async list(t){ this.db = this.load() || this.db; return [...(this.db[t] || [])].sort((a, b) => t === T.config ? 0 : String(b.created_at).localeCompare(String(a.created_at))); }
+  async insert(t, row){ const r = { id: uid(), created_at: nowIso(), ...row }; (this.db[t] ||= []).push(r); this.save(); return r; }
+  async update(t, id, patch){ const r = this.db[t].find(x => x.id === id); Object.assign(r, patch); this.save(); return r; }
+  async upsert(t, rows, onConflict){
+    this.db[t] ||= [];
+    for (const row of rows) {
+      const ex = this.db[t].find(x => x[onConflict] === row[onConflict]);
+      if (ex) Object.assign(ex, row); else this.db[t].push({ id: uid(), created_at: nowIso(), ...row });
+    }
+    this.save();
+  }
+  async remove(t, id){ this.db[t] = this.db[t].filter(x => x.id !== id); this.save(); }
+  async updateMany(t, ids, patch){ const set = new Set(ids); this.db[t].forEach(r => { if (set.has(r.id)) Object.assign(r, patch); }); this.save(); }
+  async findByCpf(t, cpf){ this.db = this.load() || this.db; return (this.db[t] || []).filter(x => x.cpf === cpf); }
+  subscribe(cb){ addEventListener("storage", e => { if (e.key === this.key) cb("*", null); }); }
+}
+
+function fakeCpf(seed){
+  const d = String(seed).padStart(9, "0").slice(0, 9).split("").map(Number);
+  const dv = n => { let s = 0; for (let i = 0; i < n; i++) s += d[i] * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
+  d.push(dv(9)); d.push(dv(10)); return d.join("");
+}
+function seedDemo(){
+  const h = n => new Date(Date.now() - n * 3600e3).toISOString();
+  const cart = [
+    ["Exemplo Ana Paula Ribeiro", "412738905", "ext_aribeiro", "100482", 72],
+    ["Exemplo Bruno Tavares Lima", "295847136", "ext_blima", "100517", 60],
+    ["Exemplo Carla Mendes Souza", "538201974", "ext_csouza", "100533", 50],
+    ["Exemplo Diego Farias Nunes", "184672093", "ext_dnunes", "100541", 30],
+    ["Exemplo Elaine Rocha Alves", "673019285", "ext_ealves", "", 20]
+  ].map(([nome, s, ext, cartao, hh]) => ({ id: uid(), nome, cpf: fakeCpf(s), ext, cartao, created_at: h(hh), updated_at: h(hh) }));
+  const ped = [
+    ["Exemplo Fábio Moreira Dias", "721093846", "ext_fdias", 0.2],
+    ["Exemplo Gabriela Pinto Costa", "309485172", "ext_gcosta", 0.8],
+    ["Exemplo Diego Farias Nunes", "184672093", "ext_dnunes", 1.5]
+  ].map(([nome, s, ext, hh], i) => ({ id: uid(), nome, cpf: fakeCpf(s), ext, motivo: ["Nunca tive cartão", "Nunca tive cartão", "2ª via de cartão"][i], status: "pendente", email_status: "nao_enviado", created_at: h(hh) }));
+  ped.push({ id: uid(), nome: "Exemplo Hugo Lopes Barros", cpf: fakeCpf("856102937"), ext: "ext_hbarros", motivo: "Nunca tive cartão", status: "aprovado", email_status: "enviado", email_enviado_em: h(3), aprovado_em: h(3), created_at: h(5) });
+  ped.filter(p => !cart.some(c => c.cpf === p.cpf)).forEach(p => cart.push({ id: uid(), nome: p.nome, cpf: p.cpf, ext: p.ext, cartao: "", created_at: p.created_at, updated_at: p.created_at }));
+  return { [T.cartoes]: cart, [T.pedidos]: ped, [T.config]: [] };
+}
+
+const store = DEMO ? new LocalStore() : LIB_FAIL ? {
+  async list(){ throw new Error("A conexão com o Supabase não carregou. Verifique a internet ou se a rede bloqueia cdn.jsdelivr.net."); },
+  async insert(){ throw new Error("Sem conexão com o banco"); }, async update(){ throw new Error("Sem conexão com o banco"); },
+  async upsert(){ throw new Error("Sem conexão com o banco"); }, async updateMany(){ throw new Error("Sem conexão com o banco"); },
+  async remove(){ throw new Error("Sem conexão com o banco"); }, async findByCpf(){ throw new Error("Sem conexão com o banco"); }, subscribe(){}
+} : new SupaStore();
+
+/* ================================================================ estado */
+const S = { cartoes: [], pedidos: [], cfg: {}, loaded: false, tab: "banco", pedFilter: "pendente", sel: new Set(), q: "", confirmDel: null, knownPed: new Set() };
+const cfgDefaults = { from: "", to: "", cc: "", subject: "Pedido de cartão Lenel — {nome}", service: "service_lenel", template: "template_bchsva8", key: "iMekFX6-ssbbn7qTT", auto: "0", intro: "", close: "" };
+const DEFAULT_LOGO = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAwMDAgQDAwMEBAQFBgoGBgUFBgwICQcKDgwPDg4MDQ0PERYTDxAVEQ0NExoTFRcYGRkZDxIbHRsYHRYYGRj/2wBDAQQEBAYFBgsGBgsYEA0QGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBj/wAARCADNAqYDASIAAhEBAxEB/8QAHQABAAICAwEBAAAAAAAAAAAAAAgJBgcBAwUCBP/EAGUQAAEDAwIDBAQEDA0PCQkAAAEAAgMEBREGBwgSIRMxQVEUImFxMlKBkRUYIzU4QmKTlaG00xYlNFNUcnN0lLGzwdEkMzdDY3V2goOSoqOy0vAJFyg2RGTC1OEpRVVWV2VmhfH/xAAbAQEAAgMBAQAAAAAAAAAAAAAABAUBAgMGB//EADMRAAICAgEEAAMFCAIDAAAAAAABAgMEERIFEyExFEFRFSIyYYEGMzRScbHB8CNCQ5Gh/9oADAMBAAIRAxEAPwCLaIi+kHlQiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIibARET9AERE2AiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAi45gMZyM95x0AXp6f07qDVl8jsul7LW3e4yDmbS0kfO4Dzd4NHtOAsSaiuUmbKLb0jzVwSB49faP5u9Sc0ZwSbj3uMVerbxatMQuAIgaTWzt/bNYWsHySFbmsvA3tfQw/pxftTXeX2VLaZnzRtB/Gq63q+PU9KWyVDDsn7Wiv/B5ebHT43guB15ACOY94PTHzqyePg82FbHy/oXr3O+MbtV5/lF5Vz4J9mayJ7KMaitrz3PhuLpcffQ9R/t7H/M3+Bt+pXaejecg8vn0P8Rwil9q3gRvFPEajQmuIKx37EvMDof9azmH+go5672o3C21qOTWWmKuggL+VlawdtTSDzEjMgE+Adg+5TKc+i78EiNPHsh+JGGonQcwLvWb3tb1I/o+VFOXk4hERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEOACScY6nm6YA7/wDju8yE8HOJAa045ie/zx7vH2ZUuuFjhvgvsNJubr+iElA5wns1rmGBPj/tMrT9rn4De4jq4HIUXKzIY1fKXs7UVOx6MT2O4Ub9uBFSan1u6qsOm5D2sUHVlVXs7wQP7Wzyc7qe8Nx6ynXpHRGj9A6fFl0jYqO10oIL2wR4dI7zkefWkd173Ekr2a6uorVaKm419XFSUdNG6WaeZwa2NoHMXE92PEqEW9fGLcrvV1OnNpJvQLezMcmoHM+rVQHeKdrgeRn3ZHN5Bq8q55PUrOMfRb8a8WO37Ja633U2+26oxU6z1VQ2wkFzaaR/PPJ+0iaC5w9oGFoi/wDHZoOjqJIdM6Rv955PgzzGOkif7slzx8rAoJVdXWV9xmuNdW1VTXTnMtXNKZJZT5ve7Jcfacn2roOXk8xPX4WCfW9+c5+VW2P0GmK++9shWdQm/SJhScfN47XDNraDHtvbvzC9u08e1kMvZ6g26utL91Q1sdR/KNiUJO7v5h78D+NcAub3OI9ql/Y2M1+E5/G2/wAxaLoXiP2h3AqoaO0aniorlMeVlBc2Glle74reb1Xn9o5y2dU0dFW2+SirqaKpppWdnJBURtex4PeC0jBz4juVNbmh7Q12HNx3OaD1+br8uVuvaTib3A2unp6CtrptR6bHw7bXzEywM86eQgkH7g5b7FVZPQpR+/RLz9CVTnr/AMiN8bzcG9ruVNUag2jEVtuLBl9ikl5aaceULj1id5NzyewKE1xt1wtF5qLTdKKeir6Z7o5qapZySRvb1c0g+IHXyIOQSFbHt5uRpPdLRsWotJXMVVMfUmheA2amkxkxys+1OCD4gggtyME674huHu1buabdd7TFTUWsKNmK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st8miM8jffzlTE2v2U0FtNaTBpa1ZrpY2tqLrVDtKqox19Z5Hqt+4aGgeAz1Vzl9arqXGt7ZBowZWS+/4RXXuhsrrraSS1nVNHC6nuEIcyqpHdpDHNjLoHO6YeB1HxhkjOHYy3h84hrntFd/oReBPctI1WXzUsJ5n0chJxLBnp1OAWdAehyCDzTZ331FtfZ9n7hR7qGGotla0xxW9jQ6pqJB1aIGZz2jThwd4EZyFVxO6H0qRsDpDCXeoJiHuDeuA4gAOIGBnA7s4WMK59Qo4XR/Uzkx+Hs3WzMN0tyb3utuXWaqvhMTZPqVLRtfzMpYBnliBwM95LjgcziTgdAMMRFb11wrjwitIhNtvk2ERFsYCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgPqOR8UzZYnuie1zXh8RLHNcO5zSOrSPAjr49T1UkdreMbXOjqaG2a2pHartLB6lQ6QR18bPPmPSY+x2HfdKNidM5wD0xlwByfPr0z8i45GNVkR42rf5nWu6Vfpln2i+JrZvW7II6XVjLVWyd1BegaOYfK48jvkcVtmmq6Otg7ajqYaiM/wBsieHtPyjoqZy1haWOaHMP2ru4+8L9lvut1s/1mu1wtvto6l8LvnYQVRW9AT/BPROh1J/9olybXAtw3GB3dF8PMYHM4gN7y4noqjW7m7msbhu5mth/++qv99edX6t1bdWcl11bqG4M+JW3OeoHzPcVxX7Pz3vmb/aK16LStV7ybXaHjf8Aok1xZ6SZvfTRziac/wCRZzP/ANFRp3F44mSwzW7a7T0pfj1bveGBrAPjxQg5PveWn7lQxaxrS/DWjm8mjovo4JBIBIOQcdQfYe8fJ19qnY3QqKnyn5Zws6hKfpaPV1HqbUOsNRz37VF4q7rcJ+klRUv5iR8Rvgxn3DQAO8YPVeTjyXKK7S0uMfCILbctthERDAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQH//2Q==";
+const cfg = k => (k === "logo" ? (S.cfg.logo || DEFAULT_LOGO) : ["service", "template", "key"].includes(k) ? (S.cfg[k] || cfgDefaults[k]) : (S.cfg[k] ?? cfgDefaults[k] ?? ""));
+const mailReady = () => !!(cfg("service") && cfg("template") && cfg("key") && window.emailjs);
+
+async function loadAll(first = false){
+  try {
+    const [c, p, g] = await Promise.all([store.list(T.cartoes), store.list(T.pedidos), store.list(T.config)]);
+    if (S.loaded && !first) {
+      const novos = p.filter(x => x.status === "pendente" && !S.knownPed.has(x.id));
+      if (novos.length) toast(novos.length === 1 ? `Novo pedido: ${novos[0].nome}` : `${novos.length} novos pedidos de cartão`, 3500);
+    }
+    S.knownPed = new Set(p.map(x => x.id));
+    S.cartoes = c; S.pedidos = p; S.cfg = Object.fromEntries(g.map(r => [r.key, r.value]));
+    S.loaded = true; S.loadError = null; setLive(DEMO ? "demo" : "on");
+    renderAll(first);
+  } catch (e) {
+    console.error(e); setLive("off");
+    const msg = String(e.message || e);
+    const first = !S.loadError;
+    S.loadError = /permission denied/i.test(msg)
+      ? "O banco recusou o acesso (permission denied). Rode no Supabase o comando de permissão que está em Configurações → Avançado e recarregue a página."
+      : /does not exist|relation/i.test(msg)
+        ? "As tabelas do Lenel não foram encontradas neste projeto do Supabase. Rode o SQL de Configurações → Avançado."
+        : "Não foi possível conectar ao banco: " + msg;
+    S.loaded = true;
+    renderAll(first);
+    if (first) toast(S.loadError, 8000);
+  }
+}
+function setLive(s){
+  const tag = $("#liveTag"); tag.classList.toggle("demo", s === "demo"); tag.classList.toggle("off", s === "off");
+  $("#liveTxt").textContent = s === "demo" ? "DEMO · LOCAL" : s === "off" ? "SEM CONEXÃO" : "AO VIVO";
+}
+
+/* ================================================================ render */
+function renderAll(first){
+  $("#errBanner").hidden = !S.loadError;
+  $("#errText").textContent = S.loadError || "";
+  renderKpis(); renderBanco(); renderPedidos(); renderEnvio(); renderConfig(); renderFormLink(); renderFeed();
+  if (first) { enter(".bento > .cell", { step: .06, y: 14 }); enter(`[data-pane="${S.tab}"]`, { y: 8 }); }
+}
+function cardByCpf(cpf){ return S.cartoes.find(c => c.cpf === cpf); }
+
+function delBtn(id){
+  return S.confirmPed === id
+    ? `<span class="confirm">Excluir? <button class="btn small danger" data-act="pdelYes" data-id="${id}">Sim</button><button class="btn small ghost" data-act="pdelNo">Não</button></span>`
+    : `<button class="btn small ghost danger" data-act="pdel" data-id="${id}" title="Excluir este registro">Excluir</button>`;
+}
+function renderFeed(){
+  if (!$("#feedList")) return;
+  const rows = [...S.pedidos].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 30);
+  const hoje = S.pedidos.filter(p => isToday(p.created_at)).length;
+  $("#feedCount").textContent = `${hoje} hoje`;
+  let seen = S.seenForm; if (!seen) { try { seen = +localStorage.getItem("lenel_seen_form") || 0; } catch { seen = 0; } }
+  const novos = S.pedidos.filter(p => new Date(p.created_at) > seen).length;
+  const cf = $("#cntForm"); cf.textContent = novos; cf.classList.toggle("z", !novos || S.tab === "form");
+  S.feedSeen ||= new Set();
+  $("#feedList").innerHTML = rows.length ? rows.map(p => {
+    const st = p.status === "concluido" && p.motivo === "Tenho cartão" ? '<span class="pill p-ok">Salvo no banco</span>'
+      : p.status === "pendente" ? '<span class="pill p-crit">Pedido pendente</span>'
+      : p.status === "aprovado" ? '<span class="pill p-run">Aprovado</span>'
+      : p.status === "concluido" ? '<span class="pill p-ok">Concluído</span>' : '<span class="pill p-idle">Recusado</span>';
+    const isNew = S.loadedOnce && !S.feedSeen.has(p.id);
+    return `<div class="frow${isNew ? " new" : ""}"><span class="nm">${esc(p.nome)}</span><span class="tags">${motivoTag(p.motivo)} ${st} ${delBtn(p.id)}</span><span class="sub">${fmtCpf(p.cpf)} · ${esc(p.ext) || "–"} · ${ago(p.created_at)}</span></div>`;
+  }).join("") : `<div class="empty"><strong>Nada recebido ainda</strong>Copie o link acima e mande no grupo.</div>`;
+  rows.forEach(p => S.feedSeen.add(p.id)); S.loadedOnce = true;
+}
+function renderKpis(){
+  const pend = S.pedidos.filter(p => p.status === "pendente");
+  const aguard = S.pedidos.filter(p => p.status === "aprovado");
+  const mailHoje = S.pedidos.filter(p => p.email_status === "enviado" && isToday(p.email_enviado_em)).length;
+  const fail = S.pedidos.filter(p => p.status === "aprovado" && p.email_status === "falha").length;
+  const semCartao = S.cartoes.filter(c => !c.cartao).length;
+  $("#kPend").textContent = pend.length;
+  $("#kPendSub").textContent = pend.length ? `mais antigo ${ago(pend[pend.length - 1].created_at)}` : "nenhum esperando";
+  $("#kBanco").textContent = S.cartoes.length;
+  $("#kBancoSub").textContent = semCartao ? `${semCartao} sem cartão` : "";
+  $("#kAguard").textContent = aguard.length;
+  $("#kMail").textContent = mailHoje;
+  $("#kFail").textContent = fail;
+  const cp = $("#cntPed"); cp.textContent = pend.length; cp.classList.toggle("z", !pend.length);
+  const ce = $("#cntEnv"); ce.textContent = aguard.length; ce.classList.toggle("z", !aguard.length);
+}
+
+function skeletonRows(n, cols){ return Array.from({ length: n }, () => `<tr>${Array.from({ length: cols }, (_, i) => `<td><div class="sk" style="height:14px;width:${i === 0 ? 70 : 40 + (i * 13) % 40}%"></div></td>`).join("")}</tr>`).join(""); }
+
+function bancoStatus(c){
+  const p = S.pedidos.filter(x => x.cpf === c.cpf && (x.status === "pendente" || x.status === "aprovado"))[0];
+  if (p) return p.status === "pendente" ? `<span class="pill p-crit" title="${esc(p.motivo || "")}">Pendente${/2ª/.test(p.motivo || "") ? " · 2ª via" : ""}</span>` : `<span class="pill p-run">Com o setor</span>`;
+  if (c.cartao) return "";
+  const tem = S.pedidos.some(x => x.cpf === c.cpf && x.motivo === "Tenho cartão");
+  return tem ? '<span class="pill p-idle" title="Disse que tem cartão; informe o número em Editar">Tem cartão · sem nº</span>' : '<span class="pill p-warn">Sem cartão</span>';
+}
+function renderBanco(){
+  const body = $("#bancoBody");
+  if (!S.loaded) { body.innerHTML = skeletonRows(6, 6); return; }
+  const q = S.q.trim().toLowerCase(), qd = onlyDigits(q);
+  const rows = [...S.cartoes].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).filter(c => !S.bf || (S.bf === "pend" ? /Pendente|setor/.test(bancoStatus(c)) : S.bf === "com" ? !!c.cartao : !c.cartao)).filter(c => !q ||
+    c.nome.toLowerCase().includes(q) || (c.ext || "").toLowerCase().includes(q) ||
+    (qd && (c.cpf.includes(qd) || (c.cartao || "").includes(qd))));
+  $("#bancoCount").textContent = q ? `${rows.length} de ${S.cartoes.length}` : `${S.cartoes.length} pessoas`;
+  if (!S.cartoes.length) { body.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>Banco vazio</strong>Adicione com “Novo cadastro”, cole uma lista do Excel, ou conclua um pedido na aba Envio.</div></td></tr>`; return; }
+  if (!rows.length) { body.innerHTML = `<tr><td colspan="6"><div class="empty">Nada encontrado para “${esc(S.q)}”.</div></td></tr>`; return; }
+  body.innerHTML = rows.map(c => `<tr>
+    <td class="name">${esc(c.nome)}</td>
+    <td class="mono">${fmtCpf(c.cpf)}</td>
+    <td class="mono">${esc(c.ext) || '<span class="muted">–</span>'}</td>
+    <td>${c.cartao ? `<span class="cardno">${esc(c.cartao)}</span>` : ""} ${bancoStatus(c)}</td>
+    <td class="muted">${dt(c.updated_at || c.created_at)}</td>
+    <td class="r">${S.confirmDel === c.id
+      ? `<span class="confirm">Excluir? <button class="btn small danger" data-act="delYes" data-id="${c.id}">Sim</button><button class="btn small ghost" data-act="delNo">Não</button></span>`
+      : `<button class="btn small ghost" data-act="edit" data-id="${c.id}">Editar</button><button class="btn small ghost danger" data-act="del" data-id="${c.id}">Excluir</button>`}</td>
+  </tr>`).join("");
+}
+
+function motivoTag(m){
+  if (!m) return '<span class="muted">–</span>';
+  const cls = /2ª via/i.test(m) ? "p-warn" : /nunca/i.test(m) ? "p-run" : "p-idle";
+  return `<span class="pill ${cls}">${esc(m)}</span>`;
+}
+function pedRows(){
+  const q = (S.pq || "").trim().toLowerCase(), qd = onlyDigits(q);
+  let rows = S.pedFilter === "todos" ? S.pedidos : S.pedidos.filter(p => p.status === S.pedFilter);
+  if (q) rows = rows.filter(p => p.nome.toLowerCase().includes(q) || (p.motivo || "").toLowerCase().includes(q) || (p.ext || "").toLowerCase().includes(q) || (qd && p.cpf.includes(qd)));
+  return rows;
+}
+function syncBulk(){
+  const vis = pedRows().filter(p => p.status === "pendente");
+  $("#bulkBar").hidden = S.sel.size < 1;
+  $("#bulkTxt").textContent = `${S.sel.size} selecionado(s)`;
+  const all = $("#selAll");
+  all.checked = vis.length > 0 && vis.every(p => S.sel.has(p.id));
+  all.indeterminate = !all.checked && vis.some(p => S.sel.has(p.id));
+  all.disabled = !vis.length;
+}
+function renderPedidos(){
+  const list = $("#pedList");
+  const all = S.pedidos;
+  $("#cP").textContent = all.filter(p => p.status === "pendente").length;
+  $("#cR").textContent = all.filter(p => p.status === "recusado").length;
+  $("#cT").textContent = all.length;
+  $$("#pedChips .chip").forEach(c => c.classList.toggle("on", c.dataset.f === S.pedFilter));
+  if (!S.loaded) { list.innerHTML = skeletonRows(8, 9); return; }
+  [...S.sel].forEach(id => { if (!all.some(p => p.id === id && p.status === "pendente")) S.sel.delete(id); });
+  const rows = pedRows();
+  $("#pedCount").textContent = `${rows.length}`;
+  syncBulk();
+  if (!rows.length) {
+    list.innerHTML = `<tr><td colspan="9"><div class="empty"><strong>${S.pq ? "Nada encontrado" : S.pedFilter === "pendente" ? "Nenhum pedido pendente" : "Nada aqui"}</strong>${!S.pq && S.pedFilter === "pendente" ? "Copie o link acima e envie no grupo. Cada envio aparece aqui automaticamente." : ""}</div></td></tr>`;
+    return;
+  }
+  const cpfCount = {};
+  all.forEach(p => { if (p.status === "pendente") cpfCount[p.cpf] = (cpfCount[p.cpf] || 0) + 1; });
+  const statusPill = p => ({ pendente: '<span class="pill p-crit">Pendente</span>', aprovado: '<span class="pill p-run">Aprovado</span>', recusado: '<span class="pill p-idle">Recusado</span>', concluido: '<span class="pill p-ok">Concluído</span>' }[p.status] || "");
+  list.innerHTML = rows.map(p => {
+    const ex = cardByCpf(p.cpf);
+    const dup = p.status === "pendente" && cpfCount[p.cpf] > 1;
+    const aviso = [
+      ex ? `<span class="pill p-warn" title="${ex.cartao ? "Cartão " + esc(ex.cartao) + " — pode ser 2ª via" : "Está no banco sem nº de cartão"}">No banco${ex.cartao ? " · " + esc(ex.cartao) : ""}</span>` : "",
+      dup ? `<span class="pill p-crit" title="Há outro pedido pendente com este CPF">Repetido</span>` : ""
+    ].join(" ");
+    const acts = p.status === "pendente"
+      ? `<button class="btn small ok" data-act="approve" data-id="${p.id}">Aprovar</button><button class="btn small ghost danger" data-act="reject" data-id="${p.id}">Recusar</button>`
+      : p.status === "recusado" ? `<button class="btn small ghost" data-act="reopen" data-id="${p.id}">Voltar p/ pendente</button>` : "";
+    const actsAll = (S.confirmPed === p.id ? "" : acts) + delBtn(p.id);
+    return `<tr class="${S.sel.has(p.id) ? "selr" : ""}">
+      <td>${p.status === "pendente" ? `<input type="checkbox" class="ck" data-act="sel" data-id="${p.id}" ${S.sel.has(p.id) ? "checked" : ""} aria-label="Selecionar ${esc(p.nome)}">` : ""}</td>
+      <td class="name">${esc(p.nome)}</td>
+      <td class="mono">${fmtCpf(p.cpf)}</td>
+      <td class="mono">${esc(p.ext) || '<span class="muted">–</span>'}</td>
+      <td>${motivoTag(p.motivo)}</td>
+      <td class="muted" title="${dtFull(p.created_at)}">${ago(p.created_at)}</td>
+      <td>${aviso || '<span class="muted">–</span>'}</td>
+      <td>${statusPill(p)}</td>
+      <td class="r">${actsAll}</td>
+    </tr>`;
+  }).join("");
+}
+
+function mailPill(p){
+  if (p.email_status === "enviado") return `<span class="pill p-ok">Enviado ${dt(p.email_enviado_em)}${p.email_por ? " · " + esc(p.email_por.split(" ")[0]) : ""}</span>`;
+  if (p.email_status === "falha") return `<span class="pill p-crit" title="${esc(p.email_erro)}">Falha no envio</span>`;
+  if (p.email_status === "enviando") return `<span class="pill p-run">Enviando…</span>`;
+  return `<span class="pill p-warn">E-mail não enviado</span>`;
+}
+/* ---------- compositor de e-mail ---------- */
+const MAIL = { to: [], cc: [], init: false, subjTouched: false };
+const ENV = { sel: new Set(), touched: false };
+const defaultIntro = "Olá, equipe de security,\n\nSolicito a emissão de cartão Lenel para as pessoas abaixo.";
+const defaultClose = "Obrigado.";
+const defaultSubject = n => `Pedidos de cartão Lenel — ${n} ${n === 1 ? "pessoa" : "pessoas"} — ${new Date().toLocaleDateString("pt-BR")}`;
+function aprovados(){ return S.pedidos.filter(p => p.status === "aprovado").sort((a, b) => String(a.aprovado_em).localeCompare(String(b.aprovado_em)) || a.nome.localeCompare(b.nome, "pt-BR")); }
+function syncEnvSel(all){
+  const ids = new Set(all.map(p => p.id));
+  if (!ENV.touched) ENV.sel = new Set(all.filter(p => p.email_status !== "enviado").map(p => p.id));
+  else [...ENV.sel].forEach(id => { if (!ids.has(id)) ENV.sel.delete(id); });
+}
+const selPeople = () => aprovados().filter(p => ENV.sel.has(p.id));
+function initCompose(){
+  if (MAIL.init) return;
+  MAIL.to = splitMails(cfg("to")); MAIL.cc = splitMails(cfg("cc"));
+  $("#cIntro").value = cfg("intro") || defaultIntro;
+  $("#cClose").value = cfg("close") || defaultClose;
+  MAIL.init = true; renderChips();
+}
+function renderChips(){
+  $$(".chipbox").forEach(box => {
+    const list = MAIL[box.dataset.list];
+    box.querySelectorAll(".mchip").forEach(c => c.remove());
+    const input = box.querySelector("input");
+    list.forEach((m, i) => {
+      const c = document.createElement("span");
+      c.className = "mchip" + (isMail(m) ? "" : " bad");
+      c.innerHTML = `<span>${esc(m)}</span><button type="button" aria-label="Remover ${esc(m)}" data-i="${i}">×</button>`;
+      c.querySelector("button").onclick = () => { MAIL.edited = true; list.splice(i, 1); renderChips(); };
+      box.insertBefore(c, input);
+    });
+  });
+}
+function addMails(listName, raw){
+  const list = MAIL[listName];
+  MAIL.edited = true;
+  splitMails(raw).forEach(m => { if (!list.includes(m)) list.push(m); });
+  renderChips();
+}
+$$(".chipbox").forEach(box => {
+  const input = box.querySelector("input"), name = box.dataset.list;
+  box.addEventListener("click", e => { if (e.target === box) input.focus(); });
+  input.addEventListener("keydown", e => {
+    if (["Enter", ",", ";", "Tab"].includes(e.key) && input.value.trim()) { e.preventDefault(); addMails(name, input.value); input.value = ""; }
+    else if (e.key === "Backspace" && !input.value && MAIL[name].length) { MAIL.edited = true; MAIL[name].pop(); renderChips(); }
+  });
+  input.addEventListener("blur", () => { if (input.value.trim()) { addMails(name, input.value); input.value = ""; } });
+  input.addEventListener("paste", e => { const t = e.clipboardData?.getData("text"); if (t && (/[,;\s<]/.test(t.trim()))) { e.preventDefault(); addMails(name, t); } });
+});
+$("#cSubject").addEventListener("input", () => MAIL.subjTouched = true);
+
+function introHtml(t){ return esc(t).split(/\n{2,}/).map(par => `<p style="margin:0 0 10px">${par.replace(/\n/g, "<br>")}</p>`).join(""); }
+function peopleTable(ps){
+  return `<table cellpadding="5" cellspacing="0" border="1" style="border-collapse:collapse;border-color:#D7DDE4;font-size:13px;margin:4px 0 12px;background:#fff;color:#111C26"><tr style="background:#EEF1F4;color:#465463;text-align:left"><th>Nome completo</th><th>CPF</th><th>EXT</th></tr>${ps.map(p => `<tr><td>${esc(p.nome)}</td><td>${fmtCpf(p.cpf)}</td><td>${esc(p.ext || "-")}</td></tr>`).join("")}</table>`;
+}
+const closing = () => $("#cClose").value.trim();
+const LOGO_URL = "https://cartao-lenel-kn.netlify.app/kn-logo.jpg";
+const logoHtml = () => `<img src="${LOGO_URL}" alt="Kuehne+Nagel" width="160" style="width:160px;height:auto;display:block;margin-top:6px;border:0">`;
+const composeHtml = (ps, intro, close = closing()) => `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111C26">${introHtml(intro)}${peopleTable(ps)}${close ? introHtml(close) : ""}${logoHtml()}</div>`;
+const composeText = (ps, intro, close = closing()) => intro + "\n\n" + ps.map(p => `${p.nome} | CPF ${fmtCpf(p.cpf)} | EXT ${p.ext || "-"}`).join("\n") + (close ? "\n\n" + close : "");
+
+function renderCompose(){
+  const ps = selPeople(), n = ps.length;
+  if (!MAIL.edited) { const t = splitMails(cfg("to")), c = splitMails(cfg("cc")); if (t.join() !== MAIL.to.join() || c.join() !== MAIL.cc.join()) { MAIL.to = t; MAIL.cc = c; renderChips(); } }
+  $("#cCount").textContent = `${n} ${n === 1 ? "pessoa" : "pessoas"} no e-mail`;
+  const list = assts(), sel = $("#cFromSel");
+  const opts = list.length
+    ? `<option value="" disabled ${currentAsst() ? "" : "selected"} hidden>Escolha quem está fazendo o pedido</option>` + list.map(a => `<option value="${esc(a.email)}" ${a.email === myAsst ? "selected" : ""}>${esc(a.nome)} (${esc(a.cargo || "Assistente")}) · ${esc(a.email)}</option>`).join("")
+    : `<option value="" selected>Cadastre os responsáveis em Configurações</option>`;
+  if (sel.dataset.sig !== opts) { sel.innerHTML = opts; sel.dataset.sig = opts; }
+  $("#cFrom").innerHTML = mailReady() ? "" : '<span class="pill p-warn" title="Sem EmailJS: use Abrir no Outlook ou Abrir no Gmail">Envio direto desligado</span>';
+  if (!MAIL.subjTouched) $("#cSubject").value = defaultSubject(n);
+  const sigName = currentAsst()?.nome;
+  $("#cClose").placeholder = "Obrigado.";
+  const ca = currentAsst();
+  $("#cSign").innerHTML = (ca ? `${esc(ca.nome)}<br><span style="font-weight:400;color:var(--ink-2)">${esc(ca.cargo || "Assistente")} · Kuehne+Nagel</span>` : "") +
+    (cfg("logo") ? `<div style="margin-top:6px"><span style="background:#fff;display:inline-block;padding:4px 6px;border-radius:6px"><img src="${esc(cfg("logo"))}" alt="Logo" style="height:32px;display:block"></span></div>` : "");
+  $("#cPreview").innerHTML = n ? peopleTable(ps) : `<div class="none">Marque as pessoas na lista abaixo para incluir no e-mail.</div>`;
+  ["#cSend", "#cOutlook", "#cGmail", "#cCopy", "#cMark"].forEach(id => $(id).disabled = !n);
+  $("#cTest").disabled = false;
+}
+function checkCompose(){
+  const ps = selPeople();
+  if (!ps.length) { toast("Marque pelo menos uma pessoa"); return null; }
+  if (!MAIL.to.length) { toast("Coloque pelo menos um e-mail no campo Para"); $("#toIn").focus(); return null; }
+  const bad = [...MAIL.to, ...MAIL.cc].filter(m => !isMail(m));
+  if (bad.length) { toast("E-mail inválido: " + bad.join(", "), 4000); return null; }
+  const asst = currentAsst();
+  if (assts().length && !asst) { toast("Escolha no campo De quem está fazendo o pedido"); $("#cFromSel").focus(); return null; }
+  const cc = [...MAIL.cc];
+  if (asst && $("#cCcMe").checked && !cc.includes(asst.email) && !MAIL.to.includes(asst.email)) cc.push(asst.email);
+  const close = [closing(), asst?.nome, asst ? `${asst.cargo || "Assistente"} · Kuehne+Nagel` : ""].filter(Boolean).join("\n");
+  return { ps, asst, cc, close, intro: $("#cIntro").value.trim() || defaultIntro, subject: $("#cSubject").value.trim() || defaultSubject(ps.length) };
+}
+async function copyRich(html, text){
+  try {
+    if (!window.ClipboardItem) throw 0;
+    await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+    return true;
+  } catch { try { await navigator.clipboard.writeText(text); return true; } catch { return false; } }
+}
+async function markSent(ps, asst = currentAsst()){
+  await store.updateMany(T.pedidos, ps.map(p => p.id), { email_status: "enviado", email_enviado_em: nowIso(), email_erro: null, email_por: asst?.nome || null });
+  ENV.touched = false; MAIL.subjTouched = false;
+  await loadAll();
+}
+function chunkPeople(ps, intro, close){
+  const LIMIT = 38000, out = []; let cur = [];
+  for (const p of ps) {
+    cur.push(p);
+    if (composeHtml(cur, intro, close).length > LIMIT && cur.length > 1) { cur.pop(); out.push(cur); cur = [p]; }
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
+async function ejSend(params){
+  return emailjs.send(cfg("service"), cfg("template"), params, { publicKey: cfg("key") });
+}
+$("#cSend").onclick = async () => {
+  const c = checkCompose(); if (!c) return;
+  if (!mailReady()) return toast("O envio direto ainda não está configurado. Use “Abrir no Gmail” por enquanto.", 5000);
+  const btn = $("#cSend"); btn.disabled = true;
+  const parts = chunkPeople(c.ps, c.intro, c.close);
+  let sent = 0;
+  try {
+    for (let i = 0; i < parts.length; i++) {
+      btn.textContent = parts.length > 1 ? `Enviando ${i + 1} de ${parts.length}…` : "Enviando…";
+      await ejSend({
+        to_email: MAIL.to.join(","), cc_email: c.cc.join(","),
+        subject: c.subject + (parts.length > 1 ? ` (parte ${i + 1} de ${parts.length})` : ""),
+        reply_to: c.asst?.email || "", from_name: c.asst?.nome || "Controle Lenel",
+        mensagem_html: composeHtml(parts[i], c.intro, c.close)
+      });
+      await markSent(parts[i], c.asst); sent += parts[i].length;
+    }
+    toast(parts.length > 1 ? `${parts.length} e-mails enviados com ${sent} pessoas` : `E-mail enviado com ${sent} pessoas`, 4000);
+  } catch (e) {
+    const msg = e?.text || e?.message || String(e);
+    const rest = c.ps.slice(sent);
+    await store.updateMany(T.pedidos, rest.map(p => p.id), { email_status: "falha", email_erro: msg }).catch(() => {});
+    toast(`Falha no envio${sent ? ` depois de ${sent} pessoas enviadas` : ""}: ${msg}`, 7000); loadAll();
+  }
+  btn.textContent = "Enviar pela minha conta"; btn.disabled = false;
+};
+async function openExternal(kind){
+  const c = checkCompose(); if (!c) return;
+  const ok = await copyRich(composeHtml(c.ps, c.intro, c.close), composeText(c.ps, c.intro, c.close));
+  const hint = ok ? "" : composeText(c.ps, c.intro, c.close);
+  const url = kind === "gmail"
+    ? "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(MAIL.to.join(",")) + (c.cc.length ? "&cc=" + encodeURIComponent(c.cc.join(",")) : "") + "&su=" + encodeURIComponent(c.subject) + (hint ? "&body=" + encodeURIComponent(hint.slice(0, 6000)) : "")
+    : "mailto:" + MAIL.to.map(encodeURIComponent).join(",") + "?" + (c.cc.length ? "cc=" + c.cc.map(encodeURIComponent).join(",") + "&" : "") + "subject=" + encodeURIComponent(c.subject) + (hint ? "&body=" + encodeURIComponent(hint.slice(0, 1500)) : "");
+  if (kind === "gmail") window.open(url, "_blank", "noopener"); else location.href = url;
+  toast(ok ? "Corpo do e-mail copiado. No " + (kind === "gmail" ? "Gmail" : "Outlook") + ", clique na área da mensagem e aperte Ctrl+V. Depois de enviar, volte e clique em “Marcar como enviados”."
+           : "Depois de enviar, volte e clique em “Marcar como enviados”.", 9000);
+}
+$("#cOutlook").onclick = () => openExternal("outlook");
+$("#cTest").onclick = async () => {
+  const asst = currentAsst();
+  if (!asst) { toast("Escolha seu nome no campo De: o teste vai para o seu e-mail"); $("#cFromSel").focus(); return; }
+  let ps = selPeople();
+  if (!ps.length) ps = [{ nome: "Pessoa de Exemplo da Silva", cpf: "52998224725", ext: "ext_exemplo" }];
+  const intro = $("#cIntro").value.trim() || defaultIntro;
+  const close = [closing(), asst.nome, `${asst.cargo || "Assistente"} · Kuehne+Nagel`].filter(Boolean).join("\n");
+  const ok = await copyRich(composeHtml(ps, intro, close), composeText(ps, intro, close));
+  const subject = "[TESTE] " + (MAIL.subjTouched && $("#cSubject").value.trim() ? $("#cSubject").value.trim() : defaultSubject(ps.length));
+  window.open("https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(asst.email) + "&su=" + encodeURIComponent(subject), "_blank", "noopener");
+  toast(ok ? `Teste para ${asst.email}: no Gmail, clique na mensagem e aperte Ctrl+V. Nada foi marcado como enviado.` : "Abra o Gmail e cole o texto do e-mail.", 9000);
+};
+$("#cGmail").onclick = () => openExternal("gmail");
+$("#cCopy").onclick = async () => {
+  const c = checkCompose(); if (!c) return;
+  const ok = await copyRich(composeHtml(c.ps, c.intro, c.close), composeText(c.ps, c.intro, c.close));
+  toast(ok ? "E-mail copiado com a tabela. Cole no Outlook ou Gmail (Ctrl+V)." : "Não foi possível copiar", 4000);
+};
+$("#cMark").onclick = async () => {
+  const ps = selPeople(); if (!ps.length) return;
+  await markSent(ps); toast(`${ps.length} marcados como enviados ao setor`);
+};
+$("#cSaveDef").onclick = async () => {
+  try {
+    await store.upsert(T.config, [{ key: "to", value: MAIL.to.join(", ") }, { key: "cc", value: MAIL.cc.join(", ") }, { key: "intro", value: $("#cIntro").value.trim() }, { key: "close", value: $("#cClose").value.trim() }], "key");
+    MAIL.edited = false; toast("Para, Cc e mensagem salvos como padrão"); loadAll();
+  } catch (e) { toast("Erro ao salvar: " + e.message, 4000); }
+};
+$("#envAll").onchange = e => {
+  const q = (S.eq || "").trim().toLowerCase(), qd = onlyDigits(q);
+  const vis = aprovados().filter(p => !q || p.nome.toLowerCase().includes(q) || (p.ext || "").toLowerCase().includes(q) || (qd && p.cpf.includes(qd)));
+  ENV.touched = true; vis.forEach(p => e.target.checked ? ENV.sel.add(p.id) : ENV.sel.delete(p.id)); renderEnvio();
+};
+$("#envChips").onclick = e => {
+  const b = e.target.closest("[data-es]"); if (!b) return;
+  ENV.touched = true; const all = aprovados();
+  ENV.sel = new Set(b.dataset.es === "todos" ? all.map(p => p.id) : b.dataset.es === "nao" ? all.filter(p => p.email_status !== "enviado").map(p => p.id) : []);
+  renderEnvio();
+};
+
+/* ---------- assistentes responsáveis ---------- */
+function assts(){ try { const a = JSON.parse(cfg("assistentes") || "[]"); return Array.isArray(a) ? a : []; } catch { return []; } }
+const initials = n => n.split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+async function saveAssts(list){
+  try { await store.upsert(T.config, [{ key: "assistentes", value: JSON.stringify(list) }], "key"); S.cfg.assistentes = JSON.stringify(list); renderAssts(); renderCompose(); }
+  catch (e) { toast("Erro ao salvar: " + e.message, 4000); }
+}
+function renderAssts(){
+  const list = assts();
+  $("#asstList").innerHTML = list.length ? list.map((a, i) => `<div class="asst-row"><span class="asst-av">${esc(initials(a.nome))}</span><span style="font-weight:500">${esc(a.nome)}</span><span class="em">${esc(a.email)}</span><span><span class="pill ${a.cargo === "Analista" ? "p-run" : "p-idle"}">${esc(a.cargo || "Assistente")}</span></span>${S.asstDel === i
+      ? `<span class="confirm">Remover? <button class="btn small danger" type="button" data-asst-yes="${i}">Sim</button><button class="btn small ghost" type="button" data-asst-no>Não</button></span>`
+      : `<button class="btn small ghost danger" type="button" data-asst-del="${i}">Remover</button>`}</div>`).join("")
+    : `<div class="asst-empty">Ninguém cadastrado ainda. Adicione assistentes e analistas abaixo.</div>`;
+}
+$("#asstList").addEventListener("click", e => {
+  const d = e.target.closest("[data-asst-del]"), y = e.target.closest("[data-asst-yes]"), n = e.target.closest("[data-asst-no]");
+  if (d) { S.asstDel = +d.dataset.asstDel; renderAssts(); }
+  if (n) { S.asstDel = null; renderAssts(); }
+  if (y) { const list = assts(); list.splice(+y.dataset.asstYes, 1); S.asstDel = null; saveAssts(list); toast("Assistente removido"); }
+});
+function addAsst(){
+  const nome = normName($("#asstNome").value), email = $("#asstEmail").value.trim().toLowerCase();
+  if (!nome) { toast("Informe o nome do assistente"); return $("#asstNome").focus(); }
+  if (!isMail(email)) { toast("E-mail do assistente inválido"); return $("#asstEmail").focus(); }
+  const list = assts();
+  if (list.some(a => a.email === email)) return toast("Esse e-mail já está na lista");
+  const cargo = $("#asstCargo").value || "Assistente";
+  list.push({ nome, email, cargo }); list.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  $("#asstNome").value = ""; $("#asstEmail").value = ""; $("#asstNome").focus();
+  saveAssts(list); toast(`${nome} adicionado como ${cargo.toLowerCase()}`);
+}
+$("#asstAdd").onclick = addAsst;
+$("#asstEmail").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addAsst(); } });
+$("#asstList").addEventListener("change", () => {});
+$("#asstNome").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("#asstEmail").focus(); } });
+
+let myAsst = ""; try { myAsst = localStorage.getItem("lenel_asst") || ""; } catch {}
+$("#cFromSel").onchange = e => { myAsst = e.target.value; try { localStorage.setItem("lenel_asst", myAsst); } catch {} renderCompose(); };
+const currentAsst = () => assts().find(a => a.email === myAsst) || null;
+
+function renderEnvio(){
+  const box = $("#envList");
+  if (!S.loaded) { box.innerHTML = skeletonRows(6, 9); return; }
+  const all = aprovados();
+  syncEnvSel(all);
+  initCompose(); renderCompose();
+  const q = (S.eq || "").trim().toLowerCase(), qd = onlyDigits(q);
+  const rows = q ? all.filter(p => p.nome.toLowerCase().includes(q) || (p.ext || "").toLowerCase().includes(q) || (qd && p.cpf.includes(qd))) : all;
+  $("#envCount").textContent = `${all.length} aguardando cartão`;
+  const vis = rows;
+  const ea = $("#envAll");
+  ea.checked = vis.length > 0 && vis.every(p => ENV.sel.has(p.id));
+  ea.indeterminate = !ea.checked && vis.some(p => ENV.sel.has(p.id));
+  box.innerHTML = rows.length ? rows.map(p => `<tr class="${ENV.sel.has(p.id) ? "esel" : ""}">
+      <td><input type="checkbox" class="ck" data-act="esel" data-id="${p.id}" ${ENV.sel.has(p.id) ? "checked" : ""} aria-label="Incluir ${esc(p.nome)} no e-mail"></td>
+      <td class="name">${esc(p.nome)}</td>
+      <td class="mono">${fmtCpf(p.cpf)}</td>
+      <td class="mono">${esc(p.ext) || "–"}</td>
+      <td>${motivoTag(p.motivo)}</td>
+      <td class="muted" title="${dtFull(p.aprovado_em)}">${ago(p.aprovado_em)}</td>
+      <td>${mailPill(p)}</td>
+      <td><form class="done" data-act="finish" data-id="${p.id}" style="display:flex;gap:4px">
+        <input id="card-${p.id}" inputmode="numeric" placeholder="Nº do cartão" aria-label="Número do cartão de ${esc(p.nome)}" style="border:1px solid var(--line);background:var(--surface-2);border-radius:7px;padding:3px 8px;width:110px;font-family:var(--f-mono)">
+        <button class="btn small primary" type="submit">Concluir</button></form></td>
+      <td class="r">${S.confirmPed === p.id ? "" : `<button class="btn small ghost" data-act="unapprove" data-id="${p.id}" title="Voltar para pendente">Desfazer</button>`}${delBtn(p.id)}</td>
+    </tr>`).join("")
+    : `<tr><td colspan="9"><div class="empty"><strong>${q ? "Nada encontrado" : "Nada aguardando o setor"}</strong>${q ? "" : "Aprove pedidos na aba Pedidos e eles aparecem aqui com o status do e-mail."}</div></td></tr>`;
+  const done = S.pedidos.filter(p => p.status === "concluido").sort((a, b) => String(b.concluido_em).localeCompare(String(a.concluido_em))).slice(0, 50);
+  $("#doneCount").textContent = done.length ? `${done.length}` : "";
+  $("#doneBody").innerHTML = done.length ? done.map(p => `<tr><td class="name">${esc(p.nome)}</td><td class="mono">${fmtCpf(p.cpf)}</td><td class="mono">${esc(p.ext) || "–"}</td><td><span class="cardno">${esc(p.cartao)}</span></td><td class="muted">${dt(p.concluido_em)}</td><td class="r">${delBtn(p.id)}</td></tr>`).join("")
+    : `<tr><td colspan="6"><div class="empty" style="padding:18px">Nenhum pedido concluído ainda.</div></td></tr>`;
+}
+
+function renderConfig(){
+  renderAssts();
+  const map = { cfgTo: "to", cfgCc: "cc", cfgSubject: "subject", cfgService: "service", cfgTemplate: "template", cfgKey: "key" };
+  for (const [id, k] of Object.entries(map)) { const el = $("#" + id); if (document.activeElement !== el) el.value = cfg(k); }
+  $("#cfgAuto").checked = cfg("auto") !== "0";
+  const st = $("#mailState");
+  st.className = "pill " + (mailReady() ? "p-ok" : "p-warn");
+  st.textContent = mailReady() ? "EmailJS conectado" : "EmailJS não conectado";
+}
+
+/* ================================================================ e-mail */
+function mailText(p){ return composeText([p], cfg("intro") || defaultIntro, cfg("close") || defaultClose); }
+function mailHtml(p){ return composeHtml([p], cfg("intro") || defaultIntro, cfg("close") || defaultClose); }
+const subjectFor = p => cfg("subject").replace(/\{nome\}/g, p.nome).replace(/\{cpf\}/g, fmtCpf(p.cpf)).replace(/\{ext\}/g, p.ext || "");
+
+async function sendMail(p){
+  if (!mailReady()) throw new Error(cfg("to") ? "EmailJS não configurado" : "E-mail do setor não definido");
+  return emailjs.send(cfg("service"), cfg("template"), {
+    to_email: cfg("to"), cc_email: cfg("cc"), subject: subjectFor(p),
+    nome: p.nome, cpf: fmtCpf(p.cpf), ext: p.ext || "-", motivo: p.motivo || "-",
+    data_pedido: dtFull(p.created_at), data_aprovacao: dtFull(p.aprovado_em || nowIso()),
+    mensagem_html: mailHtml(p)
+  }, { publicKey: cfg("key") });
+}
+async function dispatchMail(p, manual = false){
+  if (!mailReady()) {
+    if (manual) toast(cfg("to") ? "Configure o EmailJS em Configurações, ou use “Copiar texto”." : "Defina o e-mail do setor em Configurações.", 4000);
+    return;
+  }
+  local(p.id, { email_status: "enviando" }); renderEnvio();
+  try {
+    await sendMail(p);
+    await store.update(T.pedidos, p.id, { email_status: "enviado", email_enviado_em: nowIso(), email_erro: null });
+    toast(`E-mail enviado ao setor: ${p.nome}`);
+  } catch (e) {
+    const msg = e?.text || e?.message || String(e);
+    await store.update(T.pedidos, p.id, { email_status: "falha", email_erro: msg }).catch(() => {});
+    toast("Falha no envio do e-mail: " + msg, 5000);
+  }
+  await loadAll();
+}
+function local(id, patch){ const p = S.pedidos.find(x => x.id === id); if (p) Object.assign(p, patch); }
+
+/* ================================================================ ações */
+async function approve(ids){
+  if (!ids.length) return;
+  const t = nowIso();
+  try { await store.updateMany(T.pedidos, ids, { status: "aprovado", aprovado_em: t }); ids.forEach(id => local(id, { status: "aprovado", aprovado_em: t })); }
+  catch (e) { toast("Erro ao aprovar: " + e.message, 4000); return loadAll(); }
+  S.sel.clear(); renderAll();
+  toast(ids.length === 1 ? "Pedido aprovado" : `${ids.length} pedidos aprovados`);
+  const ps = ids.map(id => S.pedidos.find(x => x.id === id)).filter(Boolean);
+  if (cfg("auto") === "0") return loadAll();
+  if (!mailReady()) { toast("Aprovado. O e-mail não saiu porque o envio automático não está configurado.", 4200); return loadAll(); }
+  if (ps.length === 1) await dispatchMail(ps[0]); else await dispatchBatch(ps);
+}
+
+/* um único e-mail com a lista de várias pessoas */
+function batchText(ps){ return composeText(ps, cfg("intro") || defaultIntro, cfg("close") || defaultClose); }
+function batchHtml(ps){ return composeHtml(ps, cfg("intro") || defaultIntro, cfg("close") || defaultClose); }
+async function dispatchBatch(ps, manual = false){
+  if (!mailReady()) {
+    toast(cfg("to") ? "Configure o EmailJS em Configurações, ou use “Copiar lista”." : "Defina o e-mail do setor em Configurações.", 4000);
+    return;
+  }
+  const ids = ps.map(p => p.id);
+  const subject = `Pedidos de cartão Lenel — ${ps.length} pessoas — ${new Date().toLocaleDateString("pt-BR")}`;
+  try {
+    await emailjs.send(cfg("service"), cfg("template"), {
+      to_email: cfg("to"), cc_email: cfg("cc"), subject, nome: `${ps.length} pessoas`, cpf: "", ext: "",
+      mensagem_html: batchHtml(ps)
+    }, { publicKey: cfg("key") });
+    await store.updateMany(T.pedidos, ids, { email_status: "enviado", email_enviado_em: nowIso(), email_erro: null });
+    toast(`1 e-mail enviado ao setor com ${ps.length} pessoas`, 3500);
+  } catch (e) {
+    const msg = e?.text || e?.message || String(e);
+    await store.updateMany(T.pedidos, ids, { email_status: "falha", email_erro: msg }).catch(() => {});
+    toast("Falha no envio do e-mail: " + msg, 5000);
+  }
+  await loadAll();
+}
+
+async function finish(id, cartao){
+  const p = S.pedidos.find(x => x.id === id); if (!p) return;
+  cartao = cartao.trim();
+  if (!cartao) { toast("Informe o número do cartão"); $("#card-" + id)?.focus(); return; }
+  const outro = S.cartoes.find(c => c.cartao === cartao && c.cpf !== p.cpf);
+  if (outro) { toast(`Cartão ${cartao} já pertence a ${outro.nome}`, 4500); return; }
+  const t = nowIso();
+  try {
+    await store.upsert(T.cartoes, [{ nome: p.nome, cpf: p.cpf, ext: p.ext, cartao, updated_at: t }], "cpf");
+    await store.update(T.pedidos, id, { status: "concluido", cartao, concluido_em: t });
+    toast(`${p.nome} entrou no banco com o cartão ${cartao}`);
+  } catch (e) { toast("Erro ao concluir: " + e.message, 4500); }
+  await loadAll();
+}
+
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-act],[data-go],[data-tab],[data-f]");
+  if (!b) return;
+  if (b.dataset.tab) return setTab(b.dataset.tab);
+  if (b.dataset.go) return setTab(b.dataset.go);
+  if (b.dataset.f) { S.pedFilter = b.dataset.f; S.sel.clear(); renderPedidos(); return; }
+  const id = b.dataset.id, act = b.dataset.act;
+  if (act === "sel") { b.checked ? S.sel.add(id) : S.sel.delete(id); b.closest("tr").classList.toggle("selr", b.checked); syncBulk(); return; }
+  if (act === "esel") { ENV.touched = true; b.checked ? ENV.sel.add(id) : ENV.sel.delete(id); b.closest("tr").classList.toggle("esel", b.checked); renderCompose(); const vis = $$('#envList [data-act="esel"]'); const ea = $("#envAll"); ea.checked = vis.length && vis.every(x => x.checked); ea.indeterminate = !ea.checked && vis.some(x => x.checked); return; }
+  if (act === "approve") { b.disabled = true; return approve([id]); }
+  if (act === "reject") { await store.update(T.pedidos, id, { status: "recusado" }); toast("Pedido recusado"); return loadAll(); }
+  if (act === "reopen" || act === "unapprove") { await store.update(T.pedidos, id, { status: "pendente", aprovado_em: null }); toast("Pedido voltou para pendente"); return loadAll(); }
+  if (act === "resend") { const p = S.pedidos.find(x => x.id === id); return dispatchMail(p, true); }
+  if (act === "copyMail") { const p = S.pedidos.find(x => x.id === id); return copyText(`Assunto: ${subjectFor(p)}\n\n${mailText(p)}`, "Texto do e-mail copiado"); }
+  if (act === "edit") return openPerson(S.cartoes.find(c => c.id === id));
+  if (act === "del") { S.confirmDel = id; return renderBanco(); }
+  if (act === "delNo") { S.confirmDel = null; return renderBanco(); }
+  if (act === "pdel") { S.confirmPed = id; return renderAll(); }
+  if (act === "pdelNo") { S.confirmPed = null; return renderAll(); }
+  if (act === "pdelYes") {
+    S.confirmPed = null;
+    try { await store.remove(T.pedidos, id); S.sel.delete(id); ENV.sel.delete(id); toast("Registro excluído"); } catch (e) { toast("Erro ao excluir: " + e.message, 4000); }
+    return loadAll();
+  }
+  if (act === "delYes") { S.confirmDel = null; await store.remove(T.cartoes, id); toast("Cadastro excluído"); return loadAll(); }
+});
+document.addEventListener("submit", e => {
+  const f = e.target.closest('form[data-act="finish"]');
+  if (!f) return;
+  e.preventDefault();
+  finish(f.dataset.id, $("#card-" + f.dataset.id).value);
+});
+
+$("#bulkApprove").onclick = () => approve([...S.sel]);
+$("#errRetry").onclick = () => { S.loadError = null; loadAll(true); };
+$("#envSearch").oninput = e => { S.eq = e.target.value; renderEnvio(); };
+$("#pasteCardsBtn").onclick = () => {
+  openSheet(`<div class="sheet-h"><h3>Colar números do setor</h3><button class="iconbtn" data-close aria-label="Fechar">✕</button></div>
+    <p class="hint" style="margin:0">Cole a resposta do setor com <b>CPF</b> e <b>Nº do cartão</b> em cada linha (do Excel, separados por tabulação, ponto e vírgula ou espaço). Pode ter o nome junto: o app acha o CPF e o número do cartão sozinho. Cada pessoa encontrada nos aprovados é concluída e entra no banco.</p>
+    <div class="field"><label for="cardsIn">Dados</label><textarea id="cardsIn" rows="12" class="mono" placeholder="123.456.789-09&#9;100700"></textarea></div>
+    <div id="cardsPrev" class="hint"></div>
+    <div class="toolbar"><button class="btn primary" id="cardsGo" disabled>Concluir encontrados</button><button class="btn ghost" data-close>Cancelar</button></div>`);
+  let found = [];
+  $("#cardsIn").oninput = e => {
+    const aprov = new Map(S.pedidos.filter(p => p.status === "aprovado").map(p => [p.cpf, p]));
+    const lines = e.target.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    found = []; const miss = [], semCartao = [];
+    for (const l of lines) {
+      const m = l.match(/\d{3}\.?\d{3}\.?\d{3}-?\d{2}/);
+      if (!m) { if (!/cpf/i.test(l)) miss.push(l); continue; }
+      const cpf = onlyDigits(m[0]);
+      const rest = l.replace(m[0], " ");
+      const nums = rest.match(/\d{3,}/g);
+      const p = aprov.get(cpf);
+      if (!p) { miss.push(fmtCpf(cpf)); continue; }
+      if (!nums) { semCartao.push(p.nome); continue; }
+      found.push({ p, cartao: nums[nums.length - 1] });
+    }
+    $("#cardsPrev").innerHTML = lines.length ? `<b>${found.length}</b> encontrados nos aprovados` +
+      (miss.length ? ` · <span style="color:var(--crit)">${miss.length} não estão nos aprovados: ${esc(miss.slice(0, 4).join(", "))}${miss.length > 4 ? "…" : ""}</span>` : "") +
+      (semCartao.length ? ` · <span style="color:var(--warn)">${semCartao.length} sem número de cartão na linha</span>` : "") : "";
+    $("#cardsGo").disabled = !found.length;
+  };
+  $("#cardsGo").onclick = async () => {
+    const btn = $("#cardsGo"); btn.disabled = true; btn.textContent = "Concluindo…";
+    const t = nowIso();
+    try {
+      await store.upsert(T.cartoes, found.map(({ p, cartao }) => ({ nome: p.nome, cpf: p.cpf, ext: p.ext, cartao, updated_at: t })), "cpf");
+      for (const { p, cartao } of found) await store.update(T.pedidos, p.id, { status: "concluido", cartao, concluido_em: t });
+      closeSheet(); toast(`${found.length} pessoas concluídas e salvas no banco`, 3500);
+    } catch (e) { toast("Erro: " + e.message, 5000); btn.disabled = false; btn.textContent = "Concluir encontrados"; }
+    loadAll();
+  };
+};
+$("#bulkClear").onclick = () => { S.sel.clear(); S.bulkDelArm = false; renderPedidos(); };
+$("#bulkDel").onclick = async () => {
+  const ids = [...S.sel]; if (!ids.length) return;
+  if (!S.bulkDelArm) { S.bulkDelArm = true; $("#bulkDel").textContent = `Confirmar: excluir ${ids.length}`; setTimeout(() => { S.bulkDelArm = false; const b = $("#bulkDel"); if (b) b.textContent = "Excluir selecionados"; }, 5000); return; }
+  S.bulkDelArm = false; $("#bulkDel").textContent = "Excluir selecionados";
+  try { for (const id of ids) await store.remove(T.pedidos, id); toast(`${ids.length} pedido(s) excluído(s)`); } catch (e) { toast("Erro ao excluir: " + e.message, 4000); }
+  S.sel.clear(); loadAll();
+};
+$("#bulkReject").onclick = async () => {
+  const ids = [...S.sel];
+  try { await store.updateMany(T.pedidos, ids, { status: "recusado" }); toast(`${ids.length} pedido(s) recusado(s)`); } catch (e) { toast("Erro: " + e.message, 4000); }
+  S.sel.clear(); loadAll();
+};
+$("#selAll").onchange = e => {
+  const vis = pedRows().filter(p => p.status === "pendente");
+  vis.forEach(p => e.target.checked ? S.sel.add(p.id) : S.sel.delete(p.id));
+  renderPedidos();
+};
+$("#pedSearch").oninput = e => { S.pq = e.target.value; renderPedidos(); };
+$("#bancoSearch").oninput = e => { S.q = e.target.value; renderBanco(); };
+$("#bancoChips").onclick = e => { const b = e.target.closest("[data-bf]"); if (!b) return; S.bf = b.dataset.bf; $$("#bancoChips .chip").forEach(x => x.classList.toggle("on", x === b)); renderBanco(); };
+
+/* ---------- tabs ---------- */
+function setTab(t){
+  if (!["banco", "form", "pedidos", "envio", "config"].includes(t)) t = "banco";
+  if (t === "form" && !$("#formFrame").src) $("#formFrame").src = location.href.split("#")[0].split("?")[0] + "#cadastro";
+  if (t === "form") { S.seenForm = Date.now(); try { localStorage.setItem("lenel_seen_form", S.seenForm); } catch {} renderFeed(); }
+  S.tab = t;
+  $$(".tab").forEach(x => x.classList.toggle("on", x.dataset.tab === t));
+  $$("[data-pane]").forEach(p => p.hidden = p.dataset.pane !== t);
+  try { history.replaceState(null, "", "#" + t); } catch {}
+  enter(`[data-pane="${t}"]`, { y: 8 });
+  if (t === "envio") enter("#envList > .erow", { step: .04 });
+}
+
+/* ---------- link público ---------- */
+const formUrl = () => CONFIG.FORM_URL || (location.href.split("#")[0].split("?")[0] + "#cadastro");
+function renderFormLink(){
+  const u = formUrl();
+  $("#formLink").textContent = u;
+  $("#openLink").href = u;
+  $("#linkWarn").hidden = true;
+}
+$("#copyLink").onclick = () => copyText(formUrl(), "Link de cadastro copiado");
+$("#copyLinkTop").onclick = () => copyText(formUrl(), "Link de cadastro copiado");
+
+/* ---------- editar / novo ---------- */
+function closeSheet(){ $("#sheetRoot").innerHTML = ""; }
+function openSheet(html){
+  $("#sheetRoot").innerHTML = `<div class="scrim" data-close></div><aside class="sheet" role="dialog" aria-modal="true">${html}</aside>`;
+  $("#sheetRoot .scrim").onclick = closeSheet;
+  $$("#sheetRoot [data-close]").forEach(x => x.onclick = closeSheet);
+  if (M && !reduce) try { M.animate("#sheetRoot .sheet", { x: [40, 0], opacity: [0, 1] }, { duration: .28, easing: [.22, .8, .3, 1] }); } catch {}
+  $("#sheetRoot input, #sheetRoot textarea")?.focus();
+}
+function openPerson(c){
+  const isNew = !c; c ||= { nome: "", cpf: "", ext: "", cartao: "" };
+  openSheet(`<div class="sheet-h"><h3>${isNew ? "Novo cadastro" : "Editar cadastro"}</h3><button class="iconbtn" data-close aria-label="Fechar">✕</button></div>
+    <form id="personForm" style="display:flex;flex-direction:column;gap:10px">
+      <div class="field"><label for="eNome">Nome completo</label><input id="eNome" value="${esc(c.nome)}" required></div>
+      <div class="grid2">
+        <div class="field"><label for="eCpf">CPF</label><input id="eCpf" value="${c.cpf ? fmtCpf(c.cpf) : ""}" inputmode="numeric" maxlength="14" required></div>
+        <div class="field"><label for="eExt">EXT</label><input id="eExt" value="${esc(c.ext)}"></div>
+      </div>
+      <div class="field"><label for="eCartao">Número do cartão</label><input id="eCartao" value="${esc(c.cartao)}" inputmode="numeric"><span class="hint">Pode ficar em branco até o setor devolver o número.</span></div>
+      <div class="field"><span class="err" id="eErr"></span></div>
+      <div class="toolbar"><button class="btn primary" type="submit">${isNew ? "Adicionar ao banco" : "Salvar alterações"}</button><button class="btn ghost" type="button" data-close>Cancelar</button></div>
+    </form>`);
+  $("#eCpf").oninput = e => e.target.value = maskCpf(e.target.value);
+  $("#personForm").onsubmit = async ev => {
+    ev.preventDefault();
+    const nome = normName($("#eNome").value), cpf = onlyDigits($("#eCpf").value), ext = $("#eExt").value.trim(), cartao = $("#eCartao").value.trim();
+    const err = $("#eErr");
+    if (nome.split(" ").length < 2) return err.textContent = "Informe nome e sobrenome.";
+    if (!cpfValido(cpf)) return err.textContent = "CPF inválido. Confira os 11 dígitos.";
+    const dupCpf = S.cartoes.find(x => x.cpf === cpf && x.id !== c.id);
+    if (dupCpf) return err.textContent = `Este CPF já está cadastrado para ${dupCpf.nome}.`;
+    const dupCard = cartao && S.cartoes.find(x => x.cartao === cartao && x.id !== c.id);
+    if (dupCard) return err.textContent = `O cartão ${cartao} já pertence a ${dupCard.nome}.`;
+    try {
+      if (isNew) await store.insert(T.cartoes, { nome, cpf, ext, cartao, updated_at: nowIso() });
+      else await store.update(T.cartoes, c.id, { nome, cpf, ext, cartao, updated_at: nowIso() });
+      closeSheet(); toast(isNew ? "Adicionado ao banco" : "Cadastro atualizado"); loadAll();
+    } catch (e) { err.textContent = "Erro ao salvar: " + e.message; }
+  };
+}
+$("#newPerson").onclick = () => openPerson(null);
+
+/* ---------- colar lista ---------- */
+$("#pasteBtn").onclick = () => {
+  openSheet(`<div class="sheet-h"><h3>Colar lista</h3><button class="iconbtn" data-close aria-label="Fechar">✕</button></div>
+    <p class="hint" style="margin:0">Copie do Excel ou Google Sheets as colunas <b>Nome completo, CPF, EXT, Nº do cartão</b> (nessa ordem) e cole abaixo. Pessoas com CPF já existente são atualizadas.</p>
+    <div class="field"><label for="pasteIn">Dados</label><textarea id="pasteIn" rows="10" class="mono" placeholder="Maria da Silva&#9;123.456.789-09&#9;ext_msilva&#9;100700"></textarea></div>
+    <div id="pastePrev" class="hint"></div>
+    <div class="toolbar"><button class="btn primary" id="pasteGo" disabled>Importar</button><button class="btn ghost" data-close>Cancelar</button></div>`);
+  let parsed = [];
+  $("#pasteIn").oninput = e => {
+    const lines = e.target.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const ok = [], bad = [];
+    for (const l of lines) {
+      const c = l.split(/\t|;/).map(x => x.trim());
+      if (/^nome/i.test(c[0])) continue;
+      const cpf = onlyDigits(c[1]).padStart(11, "0");
+      if (!c[0] || !cpfValido(cpf)) { bad.push(c[0] || l); continue; }
+      ok.push({ nome: normName(c[0]), cpf, ext: c[2] || "", cartao: onlyDigits(c[3]) ? c[3] : "", updated_at: nowIso() });
+    }
+    parsed = ok;
+    const novos = ok.filter(r => !cardByCpf(r.cpf)).length;
+    $("#pastePrev").innerHTML = lines.length ? `<b>${ok.length}</b> linhas válidas (${novos} novas, ${ok.length - novos} atualizações)${bad.length ? ` · <span style="color:var(--crit)">${bad.length} com CPF inválido: ${esc(bad.slice(0, 4).join(", "))}${bad.length > 4 ? "…" : ""}</span>` : ""}` : "";
+    $("#pasteGo").disabled = !ok.length;
+  };
+  $("#pasteGo").onclick = async () => {
+    try { await store.upsert(T.cartoes, parsed, "cpf"); closeSheet(); toast(`${parsed.length} pessoas importadas`); loadAll(); }
+    catch (e) { toast("Erro ao importar: " + e.message, 5000); }
+  };
+};
+
+/* ---------- exportar ---------- */
+$("#exportBtn").onclick = () => {
+  if (!window.XLSX) return toast("Biblioteca de Excel não carregou");
+  const rows = [...S.cartoes].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).map(c => ({ "Nome completo": c.nome, "CPF": fmtCpf(c.cpf), "EXT": c.ext || "", "Nº do cartão": c.cartao || "", "Atualizado": dtFull(c.updated_at || c.created_at) }));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows); ws["!cols"] = [{ wch: 38 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 18 }];
+  XLSX.utils.book_append_sheet(wb, ws, "Banco Lenel");
+  const ped = S.pedidos.map(p => ({ "Nome": p.nome, "CPF": fmtCpf(p.cpf), "EXT": p.ext || "", "Motivo": p.motivo || "", "Status": p.status, "E-mail": p.email_status || "", "Cartão": p.cartao || "", "Pedido em": dtFull(p.created_at), "Aprovado em": dtFull(p.aprovado_em), "Concluído em": dtFull(p.concluido_em) }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ped), "Pedidos");
+  XLSX.writeFile(wb, `controle-lenel-${new Date().toISOString().slice(0, 10)}.xlsx`);
+};
+
+/* ---------- configurações ---------- */
+$("#cfgForm").onsubmit = async e => {
+  e.preventDefault();
+  const vals = { to: $("#cfgTo").value.trim(), cc: $("#cfgCc").value.trim(), subject: $("#cfgSubject").value.trim() || cfgDefaults.subject, service: $("#cfgService").value.trim(), template: $("#cfgTemplate").value.trim(), key: $("#cfgKey").value.trim(), auto: $("#cfgAuto").checked ? "1" : "0" };
+  if ([...splitMails(vals.to), ...splitMails(vals.cc)].some(m => !isMail(m))) return toast("Um dos e-mails está inválido");
+  try { await store.upsert(T.config, Object.entries(vals).map(([key, value]) => ({ key, value })), "key"); toast("Configurações salvas"); loadAll(); }
+  catch (err) { toast("Erro ao salvar: " + err.message, 5000); }
+};
+$("#testMail").onclick = async () => {
+  if (!mailReady()) return toast("Preencha e salve o e-mail do setor e os três campos do EmailJS primeiro.", 4000);
+  const fake = { nome: "TESTE — ignore este e-mail", cpf: "00000000000", ext: "teste", created_at: nowIso(), aprovado_em: nowIso() };
+  try { await sendMail(fake); toast("E-mail de teste enviado para " + cfg("to"), 4000); }
+  catch (e) { toast("Falhou: " + (e?.text || e?.message || e), 6000); }
+};
+const SQL = `-- Controle Lenel · tabelas
+create table if not exists lenel_cartoes (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  cpf text not null unique,
+  ext text,
+  cartao text,
+  selfie text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+create table if not exists lenel_pedidos (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  cpf text not null,
+  ext text,
+  motivo text,                                  -- 2ª via de cartão | Tenho cartão | Nunca tive cartão
+  status text not null default 'pendente',      -- pendente | aprovado | recusado | concluido
+  email_status text default 'nao_enviado',      -- nao_enviado | enviando | enviado | falha
+  email_enviado_em timestamptz,
+  email_erro text,
+  email_por text,                               -- assistente que enviou
+  cartao text,
+  selfie text,
+  aprovado_em timestamptz,
+  concluido_em timestamptz,
+  created_at timestamptz default now()
+);
+create table if not exists lenel_config (key text primary key, value text);
+alter table lenel_pedidos add column if not exists motivo text;     -- caso a tabela já exista
+alter table lenel_pedidos add column if not exists email_por text;
+alter table lenel_pedidos add column if not exists selfie text;
+alter table lenel_cartoes add column if not exists selfie text;
+
+alter table lenel_cartoes enable row level security;
+alter table lenel_pedidos enable row level security;
+alter table lenel_config  enable row level security;
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on lenel_cartoes, lenel_pedidos, lenel_config to anon, authenticated;
+
+create policy "lenel_cartoes_anon" on lenel_cartoes for all to anon using (true) with check (true);
+create policy "lenel_pedidos_anon" on lenel_pedidos for all to anon using (true) with check (true);
+create policy "lenel_config_anon"  on lenel_config  for all to anon using (true) with check (true);
+
+-- tempo real (pedidos aparecem sem recarregar)
+alter publication supabase_realtime add table lenel_pedidos, lenel_cartoes, lenel_config;`;
+$("#sqlBox").textContent = SQL;
+$("#copySql").onclick = () => copyText(SQL, "SQL copiado");
+
+/* ---------- tema ---------- */
+(function(){
+  let saved = null; try { saved = localStorage.getItem("lenel_theme"); } catch {}
+  if (saved) document.documentElement.dataset.theme = saved;
+  $("#themeBtn").onclick = () => {
+    const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const nx = cur === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = nx; try { localStorage.setItem("lenel_theme", nx); } catch {}
+  };
+})();
+
+/* ================================================================ formulário público */
+function initPublic(){
+  $("#pub").hidden = false;
+  if (window.self !== window.top) document.body.classList.add("embed");
+  const fitTitle = () => { const h = $("#pub h2.one"); if (!h) return; h.style.fontSize = ""; let fs = parseFloat(getComputedStyle(h).fontSize); while (h.scrollWidth > h.clientWidth && fs > 14) { fs -= 0.5; h.style.fontSize = fs + "px"; } };
+  fitTitle(); (document.fonts?.ready || Promise.resolve()).then(fitTitle); addEventListener("resize", fitTitle);
+  const showLogo = src => { const a = $("#pub .cardart"); a.classList.add("logo"); a.innerHTML = `<img src="${esc(src)}" alt="Kuehne+Nagel">`; };
+  showLogo(DEFAULT_LOGO);
+  store.list(T.config).then(rows => {
+    const logo = (rows || []).find(r => r.key === "logo")?.value;
+    if (logo) showLogo(logo);
+  }).catch(() => {});
+  const nome = $("#pNome"), cpf = $("#pCpf"), ext = $("#pExt"), motivo = $("#pMotivo"), cartaoPub = $("#pCartao"), selfieIn = $("#pSelfie");
+  let selfieData = "";
+  const resizeSelfie = file => new Promise((resolve,reject)=>{ const rd=new FileReader(); rd.onerror=reject; rd.onload=()=>{ const im=new Image(); im.onerror=reject; im.onload=()=>{ const max=520,sc=Math.min(1,max/Math.max(im.width,im.height)),cv=document.createElement("canvas"); cv.width=Math.max(1,Math.round(im.width*sc));cv.height=Math.max(1,Math.round(im.height*sc));cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height);resolve(cv.toDataURL("image/jpeg",.72));};im.src=rd.result;};rd.readAsDataURL(file);});
+  enter([$("#pubCard")], { y: 16 });
+  const setErr = (f, m) => { $("#" + f).classList.toggle("bad", !!m); $("#" + f + " .err").textContent = m || ""; };
+  const art = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  nome.oninput = () => { art("artName", nome.value.trim() || "Seu nome aqui"); setErr("fNome"); };
+  cpf.oninput = () => { cpf.value = maskCpf(cpf.value); art("artCpf", cpf.value || "•••.•••.•••-••"); setErr("fCpf"); };
+  ext.oninput = () => setErr("fExt");
+  motivo.onchange = () => { setErr("fMotivo"); const tem=motivo.value==="Tenho cartão"; $("#cardExtra").hidden=!tem;$("#cardExtra").style.display=tem?"flex":"none";if(!tem){cartaoPub.value="";setErr("fCartao")}$("#pubSend").textContent=tem?"Enviar":"Enviar pedido"; };
+  cartaoPub.oninput=()=>{cartaoPub.value=cartaoPub.value.replace(/[^0-9A-Za-z-]/g,"");setErr("fCartao")};
+  selfieIn.onchange=async()=>{setErr("fSelfie");const f=selfieIn.files&&selfieIn.files[0];if(!f){selfieData="";return}if(!f.type.startsWith("image/")){setErr("fSelfie","Escolha uma imagem.");selfieIn.value="";return}try{selfieData=await resizeSelfie(f);$("#selfiePrev").innerHTML=`<img src="${selfieData}" alt="Prévia da selfie">`;}catch{setErr("fSelfie","Não foi possível ler esta foto.");}};
+  $("#pubForm").onsubmit = async e => {
+    e.preventDefault();
+    const n = normName(nome.value), c = onlyDigits(cpf.value), x = ext.value.trim(), mo = motivo.value, cardPub=cartaoPub.value.trim();
+    let ok = true;
+    if (n.split(" ").length < 2) { setErr("fNome", "Informe nome e sobrenome."); ok = false; }
+    if (!cpfValido(c)) { setErr("fCpf", "CPF inválido. Confira os números."); ok = false; }
+    if (!x) { setErr("fExt", "Informe seu EXT."); ok = false; }
+    if (!mo) { setErr("fMotivo", "Escolha uma opção."); ok = false; }
+    if (mo==="Tenho cartão" && !cardPub) { setErr("fCartao","Informe a numeração do Cartão Lenel."); ok=false; }
+    if (!selfieData) { setErr("fSelfie","Envie uma selfie para compor o cadastro."); ok=false; }
+    if (!ok) return;
+    const btn = $("#pubSend"), label = btn.textContent; btn.disabled = true; btn.textContent = "Enviando…";
+    const t = nowIso();
+    try {
+      if (mo === "Tenho cartão") {
+        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, cartao:cardPub, selfie:selfieData, updated_at:t }], "cpf");
+        await store.insert(T.pedidos, { nome:n, cpf:c, ext:x, cartao:cardPub, selfie:selfieData, motivo:mo, status:"concluido", concluido_em:t, email_status:"nao_enviado" }).catch(() => {});
+        $("#doneTitle").textContent = "Cadastro enviado";
+        $("#doneText").textContent = "Seus dados foram salvos no controle. Não precisa fazer mais nada.";
+      } else {
+        const prev = await store.findByCpf(T.pedidos, c);
+        if (prev.some(p => p.status === "pendente" || p.status === "aprovado")) {
+          setErr("fCpf", "Já existe um pedido em andamento para este CPF. Aguarde o retorno.");
+          btn.disabled = false; btn.textContent = label; return;
+        }
+        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, selfie:selfieData, updated_at:t }], "cpf");
+        const r=await store.insert(T.pedidos,{nome:n,cpf:c,ext:x,selfie:selfieData,motivo:mo,status:"pendente",email_status:"nao_enviado"});
+        $("#doneTitle").textContent = "Pedido enviado";
+        $("#doneText").innerHTML = `Protocolo <b class="mono">${esc(String(r.id).replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase())}</b>. Seu pedido vai para aprovação e depois para o setor que emite os cartões.`;
+      }
+      $("#pubCard").hidden = true; $("#pubDone").hidden = false;
+      enter([$("#pubDone")], { y: 16 });
+    } catch (err) {
+      console.error(err);
+      setErr("fMotivo", "Não foi possível enviar agora. Tente de novo em instantes.");
+    }
+    btn.disabled = false; btn.textContent = label;
+  };
+  $("#pubAgain").onclick = () => {
+    $("#pubForm").reset(); motivo.selectedIndex = 0; $("#pubSend").textContent = "Enviar";
+    art("artName", "Seu nome aqui"); art("artCpf", "•••.•••.•••-••");
+    $("#pubDone").hidden = true; $("#pubCard").hidden = false; nome.focus();
+  };
+}
+
+/* ================================================================ início */
+function initAdmin(){
+  $("#admin").hidden = false;
+  $("#demoBanner").hidden = !DEMO;
+  setTab((location.hash === "#painel" ? "#banco" : location.hash || "#banco").slice(1));
+  renderAll();
+  loadAll(true);
+  store.subscribe(() => loadAll());
+  setInterval(() => { if (!document.hidden) loadAll(); }, DEMO ? 5000 : 20000);
+  setInterval(renderKpis, 60000);
+}
+(function boot(){
+  const isForm = location.hostname === CONFIG.FORM_ONLY_HOST || location.hash === "#cadastro";
+  if (isForm) return initPublic();
+  let unlocked = !CONFIG.ADMIN_PIN;
+  try { unlocked ||= sessionStorage.getItem("lenel_pin") === CONFIG.ADMIN_PIN; } catch {}
+  if (unlocked) return initAdmin();
+  $("#lock").hidden = false; $("#pinIn").focus();
+  $("#lockForm").onsubmit = e => {
+    e.preventDefault();
+    if ($("#pinIn").value === CONFIG.ADMIN_PIN) { try { sessionStorage.setItem("lenel_pin", CONFIG.ADMIN_PIN); } catch {} $("#lock").hidden = true; initAdmin(); }
+    else $("#pinErr").textContent = "PIN incorreto.";
+  };
+})();
+addEventListener("hashchange", () => { if (location.hostname === CONFIG.FORM_ONLY_HOST) return; if (location.hash === "#cadastro") location.reload(); else if (!$("#admin").hidden) setTab(location.hash.slice(1)); });
+</script>
+</body>
+</html>
