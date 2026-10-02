@@ -1417,9 +1417,8 @@ $("#pasteCardsBtn").onclick = () => {
     const btn = $("#cardsGo"); btn.disabled = true; btn.textContent = "Concluindo…";
     const t = nowIso();
     try {
-      // A selfie fica em lenel_config para funcionar com o banco atual sem exigir nova coluna.
-      // Uma chave por CPF permite substituir a foto quando o cadastro for atualizado.
-      await store.upsert(T.config, [{ key: "selfie:" + c, value: selfieData }], "key");
+      // A selfie é mantida na tela como prévia. O envio do cadastro não depende dela
+      // até o armazenamento de fotos (Storage) ser configurado no Supabase.
       await store.upsert(T.cartoes, found.map(({ p, cartao }) => ({ nome: p.nome, cpf: p.cpf, ext: p.ext, cartao, updated_at: t })), "cpf");
       for (const { p, cartao } of found) await store.update(T.pedidos, p.id, { status: "concluido", cartao, concluido_em: t });
       closeSheet(); toast(`${found.length} pessoas concluídas e salvas no banco`, 3500);
@@ -1659,7 +1658,7 @@ function initPublic(){
     if (!x) { setErr("fExt", "Informe seu EXT."); ok = false; }
     if (!mo) { setErr("fMotivo", "Escolha uma opção."); ok = false; }
     if (mo==="Tenho cartão" && !/^\d{17}$/.test(cardPub)) { setErr("fCartao","Informe os 17 dígitos do Cartão Lenel."); ok=false; }
-    if (!selfieData) { setErr("fSelfie","Envie uma selfie para compor o cadastro."); ok=false; }
+    if (!selfieData) { setErr("fSelfie",""); }
     if (!ok) return;
     const btn = $("#pubSend"), label = btn.textContent; btn.disabled = true; btn.textContent = "Enviando…";
     const t = nowIso();
@@ -1684,7 +1683,7 @@ function initPublic(){
       enter([$("#pubDone")], { y: 16 });
     } catch (err) {
       console.error(err);
-      setErr("fMotivo", "Não foi possível enviar agora. Tente de novo em instantes.");
+      setErr("fMotivo", "Não foi possível enviar agora. Confira a conexão e tente novamente.");
     }
     btn.disabled = false; btn.textContent = label;
   };
