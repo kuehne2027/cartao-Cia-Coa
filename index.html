@@ -889,6 +889,17 @@ function bancoStatus(c){
   const tem = S.pedidos.some(x => x.cpf === c.cpf && x.motivo === "Tenho cartão");
   return tem ? '<span class="pill p-idle" title="Disse que tem cartão; informe o número em Editar">Tem cartão · sem nº</span>' : '<span class="pill p-warn">Sem cartão</span>';
 }
+const resizeCadastroPhoto = file => new Promise((resolve,reject)=>{ const rd=new FileReader(); rd.onerror=reject; rd.onload=()=>{ const im=new Image(); im.onerror=reject; im.onload=()=>{ const max=520,sc=Math.min(1,max/Math.max(im.width,im.height)),cv=document.createElement("canvas"); cv.width=Math.max(1,Math.round(im.width*sc));cv.height=Math.max(1,Math.round(im.height*sc));cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height);resolve(cv.toDataURL("image/jpeg",.72));};im.src=rd.result;};rd.readAsDataURL(file);});
+async function saveCadastroPhoto(cpf, photo){
+  if (!photo) return;
+  if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(photo) || photo.length > 200000) throw new Error("Foto inválida. Escolha outra imagem.");
+  const rows = await store.findByCpf(T.cartoes, cpf);
+  const person = rows.find(row => row.cpf === cpf);
+  if (!person) throw new Error("Cadastro não encontrado para salvar a foto.");
+  await store.update(T.cartoes, person.id, { selfie_data: photo, updated_at: nowIso() });
+  const saved = await store.findByCpf(T.cartoes, cpf);
+  if (!saved.some(row => row.id === person.id && row.selfie_data === photo)) throw new Error("Os dados foram salvos, mas a foto não foi confirmada no banco. Tente adicionar a foto em Editar cadastro.");
+}
 function photoHtml(photo, large = false){
   if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(photo || "") || photo.length > 200000) return '<span class="muted">Sem foto</span>';
   return `<img src="${esc(photo)}" alt="Foto do cadastro" style="width:${large ? 160 : 44}px;height:${large ? 180 : 52}px;object-fit:cover;border-radius:10px;display:block" loading="lazy">`;
@@ -1491,7 +1502,8 @@ function openPerson(c){
   const isNew = !c; c ||= { nome: "", cpf: "", ext: "", cartao: "" };
   openSheet(`<div class="sheet-h"><h3>${isNew ? "Novo cadastro" : "Editar cadastro"}</h3><button class="iconbtn" data-close aria-label="Fechar">✕</button></div>
     <form id="personForm" style="display:flex;flex-direction:column;gap:10px">
-      <div style="display:flex;gap:14px;align-items:center">${photoHtml(c.selfie_data, true)}<div><b>${esc(c.nome || "Novo cadastro")}</b><div class="hint">Foto enviada no formulário de cadastro.</div></div></div>
+      <div style="display:flex;gap:14px;align-items:center"><div id="editPhotoPreview">${photoHtml(c.selfie_data, true)}</div><div><b>${esc(c.nome || "Novo cadastro")}</b><div class="hint">Foto do cadastro.</div></div></div>
+      <div class="field"><label for="editPhotoFile">Adicionar / trocar foto</label><input id="editPhotoFile" type="file" accept="image/*" capture="user"><span class="hint">Escolha a foto e clique em Salvar alterações.</span></div>
       <div class="field"><label for="eNome">Nome completo</label><input id="eNome" value="${esc(c.nome)}" required></div>
       <div class="grid2">
         <div class="field"><label for="eCpf">CPF</label><input id="eCpf" value="${c.cpf ? fmtCpf(c.cpf) : ""}" inputmode="numeric" maxlength="14" required></div>
@@ -1501,6 +1513,22 @@ function openPerson(c){
       <div class="field"><span class="err" id="eErr"></span></div>
       <div class="toolbar"><button class="btn primary" type="submit">${isNew ? "Adicionar ao banco" : "Salvar alterações"}</button><button class="btn ghost" type="button" data-close>Cancelar</button></div>
     </form>`);
+  let editPhotoData = "", editPhotoTask = null, editPhotoError = "", editPhotoVersion = 0;
+  $("#editPhotoFile").onchange = () => {
+    const version = ++editPhotoVersion, file = $("#editPhotoFile").files?.[0];
+    editPhotoData = ""; editPhotoError = ""; $("#eErr").textContent = "";
+    $("#editPhotoPreview").innerHTML = photoHtml(c.selfie_data, true);
+    if (!file) { editPhotoTask = null; return; }
+    editPhotoTask = (async () => {
+      try {
+        if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) throw new Error("Escolha uma imagem de até 10 MB.");
+        const data = await resizeCadastroPhoto(file);
+        if (data.length > 200000) throw new Error("Escolha uma foto menor.");
+        if (version !== editPhotoVersion) return;
+        editPhotoData = data; $("#editPhotoPreview").innerHTML = photoHtml(data, true);
+      } catch (error) { if (version === editPhotoVersion) { editPhotoError = error.message || "Não foi possível carregar a foto."; $("#eErr").textContent = editPhotoError; } }
+    })();
+  };
   $("#eCpf").oninput = e => e.target.value = maskCpf(e.target.value);
   $("#personForm").onsubmit = async ev => {
     ev.preventDefault();
@@ -1512,11 +1540,17 @@ function openPerson(c){
     if (dupCpf) return err.textContent = `Este CPF já está cadastrado para ${dupCpf.nome}.`;
     const dupCard = cartao && S.cartoes.find(x => x.cartao === cartao && x.id !== c.id);
     if (dupCard) return err.textContent = `O cartão ${cartao} já pertence a ${dupCard.nome}.`;
+    const btn = $("#personForm button[type=submit]");
+    if (btn.disabled) return;
+    btn.disabled = true;
     try {
+      if (editPhotoTask) await editPhotoTask;
+      if (editPhotoError) throw new Error(editPhotoError);
       if (isNew) await store.insert(T.cartoes, { nome, cpf, ext, cartao, updated_at: nowIso() });
       else await store.update(T.cartoes, c.id, { nome, cpf, ext, cartao, updated_at: nowIso() });
+      await saveCadastroPhoto(cpf, editPhotoData);
       closeSheet(); toast(isNew ? "Adicionado ao banco" : "Cadastro atualizado"); loadAll();
-    } catch (e) { err.textContent = "Erro ao salvar: " + e.message; }
+    } catch (e) { err.textContent = "Erro ao salvar: " + e.message; btn.disabled = false; }
   };
 }
 $("#newPerson").onclick = () => openPerson(null);
@@ -1647,7 +1681,7 @@ function initPublic(){
   }).catch(() => {});
   const nome = $("#pNome"), cpf = $("#pCpf"), ext = $("#pExt"), motivo = $("#pMotivo"), cartaoPub = $("#pCartao"), selfieIn = $("#pSelfie");
   let selfieData = "", selfieTask = null, photoVersion = 0;
-  const resizeSelfie = file => new Promise((resolve,reject)=>{ const rd=new FileReader(); rd.onerror=reject; rd.onload=()=>{ const im=new Image(); im.onerror=reject; im.onload=()=>{ const max=520,sc=Math.min(1,max/Math.max(im.width,im.height)),cv=document.createElement("canvas"); cv.width=Math.max(1,Math.round(im.width*sc));cv.height=Math.max(1,Math.round(im.height*sc));cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height);resolve(cv.toDataURL("image/jpeg",.72));};im.src=rd.result;};rd.readAsDataURL(file);});
+  const resizeSelfie = resizeCadastroPhoto;
   enter([$("#pubCard")], { y: 16 });
   const setErr = (f, m) => { $("#" + f).classList.toggle("bad", !!m); $("#" + f + " .err").textContent = m || ""; };
   const art = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
@@ -1692,15 +1726,16 @@ function initPublic(){
     if (!x) { setErr("fExt", "Informe seu EXT."); ok = false; }
     if (!mo) { setErr("fMotivo", "Escolha uma opção."); ok = false; }
     if (mo==="Tenho cartão" && !/^\d{17}$/.test(cardPub)) { setErr("fCartao","Informe os 17 dígitos do Cartão Lenel."); ok=false; }
-    if (selfieTask) await selfieTask;
+    if ($("#pubSend").disabled) return;
+    if (selfieTask) { $("#pubSend").disabled = true; await selfieTask; $("#pubSend").disabled = false; }
     if (selfieIn.files?.length && !selfieData) { setErr("fSelfie", "A foto não foi carregada. Escolha outra imagem ou remova o arquivo."); ok = false; }
     if (!ok) return;
     const btn = $("#pubSend"), label = btn.textContent; btn.disabled = true; btn.textContent = "Enviando…";
     const t = nowIso();
-    const photoPatch = selfieData ? { selfie_data: selfieData } : {};
     try {
       if (mo === "Tenho cartão") {
-        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, cartao:cardPub, updated_at:t, ...photoPatch }], "cpf");
+        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, cartao:cardPub, updated_at:t }], "cpf");
+        await saveCadastroPhoto(c, selfieData);
         $("#doneTitle").textContent = "Cadastro enviado";
         $("#doneText").textContent = "Seus dados foram salvos no controle. Não precisa fazer mais nada.";
       } else {
@@ -1709,7 +1744,8 @@ function initPublic(){
           setErr("fCpf", "Já existe um pedido em andamento para este CPF. Aguarde o retorno.");
           btn.disabled = false; btn.textContent = label; return;
         }
-        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, updated_at:t, ...photoPatch }], "cpf");
+        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, updated_at:t }], "cpf");
+        await saveCadastroPhoto(c, selfieData);
         const r=await store.insert(T.pedidos,{nome:n,cpf:c,ext:x,motivo:mo,status:"pendente",email_status:"nao_enviado"});
         $("#doneTitle").textContent = "Pedido enviado";
         $("#doneText").innerHTML = `Protocolo <b class="mono">${esc(String(r.id).replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase())}</b>. Seu pedido vai para aprovação e depois para o setor que emite os cartões.`;
@@ -1718,7 +1754,7 @@ function initPublic(){
       enter([$("#pubDone")], { y: 16 });
     } catch (err) {
       console.error(err);
-      setErr("fMotivo", /selfie_data|PGRST204|42703/.test(String(err.message || err.code)) ? "O armazenamento de fotos ainda precisa ser ativado no Controle Lenel. Avise o responsável e tente novamente depois." : "Não foi possível enviar agora. Confira a conexão e tente novamente.");
+      setErr("fMotivo", /selfie_data|PGRST204|42703/.test(String(err.message || err.code)) ? "O armazenamento de fotos ainda precisa ser ativado no Controle Lenel. Avise o responsável e tente novamente depois." : (err.message || "Não foi possível enviar agora. Confira a conexão e tente novamente."));
     }
     btn.disabled = false; btn.textContent = label;
   };
