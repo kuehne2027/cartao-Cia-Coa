@@ -664,7 +664,7 @@ const CONFIG = {
   SUPABASE_URL: "https://cjentqthseecgizptyqe.supabase.co",
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqZW50cXRoc2VlY2dpenB0eXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxMDY0MTIsImV4cCI6MjEwNTY4MjQxMn0.UWIWzQIEZOWQ2RPOyPmsD3Jo2A6G90W9Rwl1rtEQZv0",      // cole aqui a anon key (Project Settings → API). Vazio = modo demonstração
   ADMIN_PIN: "",
-  FORM_URL: "",   // link que o pessoal recebe (só formulário)
+  FORM_URL: "https://tinyurl.com/Cadastro-Lenel",   // link que o pessoal recebe (só formulário)
   FORM_ONLY_HOST: ""      // neste endereço o app mostra apenas o formulário               // opcional: PIN para abrir o painel (o formulário público não pede PIN)
 };
 
@@ -1463,7 +1463,7 @@ $("#bancoChips").onclick = e => { const b = e.target.closest("[data-bf]"); if (!
 /* ---------- tabs ---------- */
 function setTab(t){
   if (!["banco", "form", "pedidos", "envio", "config"].includes(t)) t = "banco";
-  if (t === "form" && !$("#formFrame").getAttribute("src")) $("#formFrame").src = formUrl();
+  if (t === "form" && !$("#formFrame").getAttribute("src")) $("#formFrame").src = localFormUrl();
   if (t === "form") { S.seenForm = Date.now(); try { localStorage.setItem("lenel_seen_form", S.seenForm); } catch {} renderFeed(); }
   S.tab = t;
   $$(".tab").forEach(x => x.classList.toggle("on", x.dataset.tab === t));
@@ -1474,15 +1474,18 @@ function setTab(t){
 }
 
 /* ---------- link público ---------- */
-const formUrl = () => {
-  const url = new URL(CONFIG.FORM_URL || location.href, location.href);
+const localFormUrl = () => {
+  const url = new URL(location.href);
   url.search = "";
   url.hash = "cadastro";
   return url.href;
 };
+const formUrl = () => CONFIG.FORM_URL || localFormUrl();
+
 function renderFormLink(){
   const u = formUrl();
-  $("#formLink").textContent = u;
+  $("#formLink").textContent = "Cadastro Lenel";
+  $("#formLink").title = u;
   $("#openLink").href = u;
   $("#linkWarn").hidden = true;
 }
@@ -1797,5 +1800,4 @@ addEventListener("hashchange", () => { if (location.hostname === CONFIG.FORM_ONL
 </script>
 </body>
 </html>
-
 
