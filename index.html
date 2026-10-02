@@ -618,10 +618,16 @@ body.embed::before{display:none}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
         </div><span class="err"></span></div>
       <div id="cardExtra" class="reveal" hidden style="display:none;flex-direction:column;gap:10px">
-        <div class="field" id="fCartao"><label for="pCartao">Número do Cartão Lenel</label><input id="pCartao" inputmode="numeric" autocomplete="off" placeholder="Digite a numeração do seu cartão"><span class="err"></span></div>
-        <div class="card-number-guide"><div class="guide-title">Onde encontro a numeração?</div>
-          <div class="lenel-example" role="img" aria-label="Ilustração indicando onde procurar a numeração do Cartão Lenel"><div class="fake-photo"></div><div class="fake-lines"></div><div class="arrow">↓ PROCURE AQUI</div><div class="number-area">0000000000</div></div>
-          <div class="hint">Procure no seu cartão a sequência numérica impressa. A imagem acima é uma ilustração para ajudar a localizar o número.</div>
+        <div class="field" id="fCartao"><label for="pCartao">Número do Cartão Lenel</label><input id="pCartao" inputmode="numeric" autocomplete="off" maxlength="17" placeholder="17 dígitos do cartão"><span class="err"></span></div>
+        <div class="card-number-guide">
+          <div class="guide-title">Onde encontro a numeração de 17 dígitos?</div>
+          <div style="position:relative;height:190px;border-radius:15px;background:#f4f3ef;border:1px solid #c9c9c5;box-shadow:0 10px 25px rgba(0,0,0,.22);overflow:hidden">
+            <div style="position:absolute;left:18px;top:16px;color:#8a8a86;font-size:11px;font-weight:700;letter-spacing:.08em">VERSO DO CARTÃO LENEL</div>
+            <div style="position:absolute;right:12px;bottom:18px;font-family:var(--f-mono);font-size:14px;font-weight:700;color:#60605c;letter-spacing:.04em">+202039 74304836102</div>
+            <div style="position:absolute;right:8px;bottom:9px;width:224px;height:38px;border:3px solid #f0a400;border-radius:9px;box-shadow:0 0 14px rgba(240,164,0,.28)"></div>
+            <div style="position:absolute;right:10px;bottom:58px;background:#f0a400;color:#17202a;font-weight:800;font-size:11px;padding:6px 9px;border-radius:7px">↓ NÚMERO DO CARTÃO — 17 DÍGITOS</div>
+          </div>
+          <div class="hint"><b>Olhe o verso do cartão, na ponta inferior direita.</b> Digite os <b>17 números</b> que aparecem nessa posição. A imagem é apenas um exemplo para mostrar onde localizar a numeração.</div>
         </div>
       </div>
       <div class="field" id="fSelfie"><label>Selfie para compor o cadastro</label>
@@ -1411,6 +1417,9 @@ $("#pasteCardsBtn").onclick = () => {
     const btn = $("#cardsGo"); btn.disabled = true; btn.textContent = "Concluindo…";
     const t = nowIso();
     try {
+      // A selfie fica em lenel_config para funcionar com o banco atual sem exigir nova coluna.
+      // Uma chave por CPF permite substituir a foto quando o cadastro for atualizado.
+      await store.upsert(T.config, [{ key: "selfie:" + c, value: selfieData }], "key");
       await store.upsert(T.cartoes, found.map(({ p, cartao }) => ({ nome: p.nome, cpf: p.cpf, ext: p.ext, cartao, updated_at: t })), "cpf");
       for (const { p, cartao } of found) await store.update(T.pedidos, p.id, { status: "concluido", cartao, concluido_em: t });
       closeSheet(); toast(`${found.length} pessoas concluídas e salvas no banco`, 3500);
@@ -1568,7 +1577,6 @@ create table if not exists lenel_cartoes (
   cpf text not null unique,
   ext text,
   cartao text,
-  selfie text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -1584,7 +1592,6 @@ create table if not exists lenel_pedidos (
   email_erro text,
   email_por text,                               -- assistente que enviou
   cartao text,
-  selfie text,
   aprovado_em timestamptz,
   concluido_em timestamptz,
   created_at timestamptz default now()
@@ -1592,8 +1599,6 @@ create table if not exists lenel_pedidos (
 create table if not exists lenel_config (key text primary key, value text);
 alter table lenel_pedidos add column if not exists motivo text;     -- caso a tabela já exista
 alter table lenel_pedidos add column if not exists email_por text;
-alter table lenel_pedidos add column if not exists selfie text;
-alter table lenel_cartoes add column if not exists selfie text;
 
 alter table lenel_cartoes enable row level security;
 alter table lenel_pedidos enable row level security;
@@ -1643,7 +1648,7 @@ function initPublic(){
   cpf.oninput = () => { cpf.value = maskCpf(cpf.value); art("artCpf", cpf.value || "•••.•••.•••-••"); setErr("fCpf"); };
   ext.oninput = () => setErr("fExt");
   motivo.onchange = () => { setErr("fMotivo"); const tem=motivo.value==="Tenho cartão"; $("#cardExtra").hidden=!tem;$("#cardExtra").style.display=tem?"flex":"none";if(!tem){cartaoPub.value="";setErr("fCartao")}$("#pubSend").textContent=tem?"Enviar":"Enviar pedido"; };
-  cartaoPub.oninput=()=>{cartaoPub.value=cartaoPub.value.replace(/[^0-9A-Za-z-]/g,"");setErr("fCartao")};
+  cartaoPub.oninput=()=>{cartaoPub.value=cartaoPub.value.replace(/\D/g,"").slice(0,17);setErr("fCartao")};
   selfieIn.onchange=async()=>{setErr("fSelfie");const f=selfieIn.files&&selfieIn.files[0];if(!f){selfieData="";return}if(!f.type.startsWith("image/")){setErr("fSelfie","Escolha uma imagem.");selfieIn.value="";return}try{selfieData=await resizeSelfie(f);$("#selfiePrev").innerHTML=`<img src="${selfieData}" alt="Prévia da selfie">`;}catch{setErr("fSelfie","Não foi possível ler esta foto.");}};
   $("#pubForm").onsubmit = async e => {
     e.preventDefault();
@@ -1653,15 +1658,15 @@ function initPublic(){
     if (!cpfValido(c)) { setErr("fCpf", "CPF inválido. Confira os números."); ok = false; }
     if (!x) { setErr("fExt", "Informe seu EXT."); ok = false; }
     if (!mo) { setErr("fMotivo", "Escolha uma opção."); ok = false; }
-    if (mo==="Tenho cartão" && !cardPub) { setErr("fCartao","Informe a numeração do Cartão Lenel."); ok=false; }
+    if (mo==="Tenho cartão" && !/^\d{17}$/.test(cardPub)) { setErr("fCartao","Informe os 17 dígitos do Cartão Lenel."); ok=false; }
     if (!selfieData) { setErr("fSelfie","Envie uma selfie para compor o cadastro."); ok=false; }
     if (!ok) return;
     const btn = $("#pubSend"), label = btn.textContent; btn.disabled = true; btn.textContent = "Enviando…";
     const t = nowIso();
     try {
       if (mo === "Tenho cartão") {
-        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, cartao:cardPub, selfie:selfieData, updated_at:t }], "cpf");
-        await store.insert(T.pedidos, { nome:n, cpf:c, ext:x, cartao:cardPub, selfie:selfieData, motivo:mo, status:"concluido", concluido_em:t, email_status:"nao_enviado" }).catch(() => {});
+        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, cartao:cardPub, updated_at:t }], "cpf");
+        await store.insert(T.pedidos, { nome:n, cpf:c, ext:x, cartao:cardPub, motivo:mo, status:"concluido", concluido_em:t, email_status:"nao_enviado" }).catch(() => {});
         $("#doneTitle").textContent = "Cadastro enviado";
         $("#doneText").textContent = "Seus dados foram salvos no controle. Não precisa fazer mais nada.";
       } else {
@@ -1670,8 +1675,8 @@ function initPublic(){
           setErr("fCpf", "Já existe um pedido em andamento para este CPF. Aguarde o retorno.");
           btn.disabled = false; btn.textContent = label; return;
         }
-        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, selfie:selfieData, updated_at:t }], "cpf");
-        const r=await store.insert(T.pedidos,{nome:n,cpf:c,ext:x,selfie:selfieData,motivo:mo,status:"pendente",email_status:"nao_enviado"});
+        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, updated_at:t }], "cpf");
+        const r=await store.insert(T.pedidos,{nome:n,cpf:c,ext:x,motivo:mo,status:"pendente",email_status:"nao_enviado"});
         $("#doneTitle").textContent = "Pedido enviado";
         $("#doneText").innerHTML = `Protocolo <b class="mono">${esc(String(r.id).replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase())}</b>. Seu pedido vai para aprovação e depois para o setor que emite os cartões.`;
       }
