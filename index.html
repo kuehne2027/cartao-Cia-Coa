@@ -399,7 +399,7 @@ body.embed::before{display:none}
       </div>
       <div class="tablebox">
         <table>
-          <thead><tr><th>Nome completo</th><th>CPF</th><th>EXT</th><th>Nº do cartão</th><th>Atualizado</th><th class="r">Ações</th></tr></thead>
+          <thead><tr><th>Foto</th><th>Nome completo</th><th>CPF</th><th>EXT</th><th>Nº do cartão</th><th>Atualizado</th><th class="r">Ações</th></tr></thead>
           <tbody id="bancoBody"></tbody>
         </table>
       </div>
@@ -628,8 +628,8 @@ body.embed::before{display:none}
           <div class="hint"><b>Olhe o verso do cartão, na ponta inferior direita.</b> Digite os <b>17 números</b> que aparecem nessa posição. A imagem é apenas um exemplo para mostrar onde localizar a numeração.</div>
         </div>
       </div>
-      <div class="field" id="fSelfie"><label>Selfie — prévia opcional</label>
-        <div class="photo-pick"><div class="photo-prev" id="selfiePrev">FOTO</div><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:13px">Visualize uma foto do rosto</div><div class="hint" style="margin:2px 0 8px">A foto aparece apenas nesta prévia. O envio e o armazenamento da selfie ainda não estão disponíveis.</div><label class="btn small" for="pSelfie">Tirar / escolher selfie</label><input id="pSelfie" type="file" accept="image/*" capture="user"></div></div><span class="err"></span>
+      <div class="field" id="fSelfie"><label>Foto do cadastro (opcional)</label>
+        <div class="photo-pick"><div class="photo-prev" id="selfiePrev">FOTO</div><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:13px">Tire ou escolha uma foto do rosto</div><div class="hint" style="margin:2px 0 8px">A foto será salva junto com seus dados e exibida no cadastro do Controle Lenel.</div><label class="btn small" for="pSelfie">Tirar / escolher selfie</label><input id="pSelfie" type="file" accept="image/*" capture="user"></div></div><span class="err"></span>
       </div>
       <button class="btn primary" type="submit" id="pubSend" style="padding:12px;font-size:14px">Enviar</button>
       <p class="hint" style="margin:0;text-align:center">Seus dados são usados apenas para o controle de acesso.</p>
@@ -889,17 +889,22 @@ function bancoStatus(c){
   const tem = S.pedidos.some(x => x.cpf === c.cpf && x.motivo === "Tenho cartão");
   return tem ? '<span class="pill p-idle" title="Disse que tem cartão; informe o número em Editar">Tem cartão · sem nº</span>' : '<span class="pill p-warn">Sem cartão</span>';
 }
+function photoHtml(photo, large = false){
+  if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(photo || "") || photo.length > 200000) return '<span class="muted">Sem foto</span>';
+  return `<img src="${esc(photo)}" alt="Foto do cadastro" style="width:${large ? 160 : 44}px;height:${large ? 180 : 52}px;object-fit:cover;border-radius:10px;display:block" loading="lazy">`;
+}
 function renderBanco(){
   const body = $("#bancoBody");
-  if (!S.loaded) { body.innerHTML = skeletonRows(6, 6); return; }
+  if (!S.loaded) { body.innerHTML = skeletonRows(6, 7); return; }
   const q = S.q.trim().toLowerCase(), qd = onlyDigits(q);
   const rows = [...S.cartoes].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).filter(c => !S.bf || (S.bf === "pend" ? /Pendente|setor/.test(bancoStatus(c)) : S.bf === "com" ? !!c.cartao : !c.cartao)).filter(c => !q ||
     c.nome.toLowerCase().includes(q) || (c.ext || "").toLowerCase().includes(q) ||
     (qd && (c.cpf.includes(qd) || (c.cartao || "").includes(qd))));
   $("#bancoCount").textContent = q ? `${rows.length} de ${S.cartoes.length}` : `${S.cartoes.length} pessoas`;
-  if (!S.cartoes.length) { body.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>Banco vazio</strong>Adicione com “Novo cadastro”, cole uma lista do Excel, ou conclua um pedido na aba Envio.</div></td></tr>`; return; }
-  if (!rows.length) { body.innerHTML = `<tr><td colspan="6"><div class="empty">Nada encontrado para “${esc(S.q)}”.</div></td></tr>`; return; }
+  if (!S.cartoes.length) { body.innerHTML = `<tr><td colspan="7"><div class="empty"><strong>Banco vazio</strong>Adicione com “Novo cadastro”, cole uma lista do Excel, ou conclua um pedido na aba Envio.</div></td></tr>`; return; }
+  if (!rows.length) { body.innerHTML = `<tr><td colspan="7"><div class="empty">Nada encontrado para “${esc(S.q)}”.</div></td></tr>`; return; }
   body.innerHTML = rows.map(c => `<tr>
+    <td><button class="btn ghost small" data-act="edit" data-id="${esc(c.id)}" aria-label="Abrir cadastro de ${esc(c.nome)}">${photoHtml(c.selfie_data)}</button></td>
     <td class="name">${esc(c.nome)}</td>
     <td class="mono">${fmtCpf(c.cpf)}</td>
     <td class="mono">${esc(c.ext) || '<span class="muted">–</span>'}</td>
@@ -1415,8 +1420,6 @@ $("#pasteCardsBtn").onclick = () => {
     const btn = $("#cardsGo"); btn.disabled = true; btn.textContent = "Concluindo…";
     const t = nowIso();
     try {
-      // A selfie é mantida na tela como prévia. O envio do cadastro não depende dela
-      // até o armazenamento de fotos (Storage) ser configurado no Supabase.
       await store.upsert(T.cartoes, found.map(({ p, cartao }) => ({ nome: p.nome, cpf: p.cpf, ext: p.ext, cartao, updated_at: t })), "cpf");
       for (const { p, cartao } of found) await store.update(T.pedidos, p.id, { status: "concluido", cartao, concluido_em: t });
       closeSheet(); toast(`${found.length} pessoas concluídas e salvas no banco`, 3500);
@@ -1488,6 +1491,7 @@ function openPerson(c){
   const isNew = !c; c ||= { nome: "", cpf: "", ext: "", cartao: "" };
   openSheet(`<div class="sheet-h"><h3>${isNew ? "Novo cadastro" : "Editar cadastro"}</h3><button class="iconbtn" data-close aria-label="Fechar">✕</button></div>
     <form id="personForm" style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;gap:14px;align-items:center">${photoHtml(c.selfie_data, true)}<div><b>${esc(c.nome || "Novo cadastro")}</b><div class="hint">Foto enviada no formulário de cadastro.</div></div></div>
       <div class="field"><label for="eNome">Nome completo</label><input id="eNome" value="${esc(c.nome)}" required></div>
       <div class="grid2">
         <div class="field"><label for="eCpf">CPF</label><input id="eCpf" value="${c.cpf ? fmtCpf(c.cpf) : ""}" inputmode="numeric" maxlength="14" required></div>
@@ -1600,6 +1604,7 @@ create table if not exists lenel_pedidos (
 );
 create table if not exists lenel_config (key text primary key, value text);
 alter table lenel_pedidos add column if not exists motivo text;     -- caso a tabela já exista
+alter table lenel_cartoes add column if not exists selfie_data text;
 alter table lenel_pedidos add column if not exists email_por text;
 
 alter table lenel_cartoes enable row level security;
@@ -1641,7 +1646,7 @@ function initPublic(){
     if (logo) showLogo(logo);
   }).catch(() => {});
   const nome = $("#pNome"), cpf = $("#pCpf"), ext = $("#pExt"), motivo = $("#pMotivo"), cartaoPub = $("#pCartao"), selfieIn = $("#pSelfie");
-  let selfieData = "";
+  let selfieData = "", selfieTask = null, photoVersion = 0;
   const resizeSelfie = file => new Promise((resolve,reject)=>{ const rd=new FileReader(); rd.onerror=reject; rd.onload=()=>{ const im=new Image(); im.onerror=reject; im.onload=()=>{ const max=520,sc=Math.min(1,max/Math.max(im.width,im.height)),cv=document.createElement("canvas"); cv.width=Math.max(1,Math.round(im.width*sc));cv.height=Math.max(1,Math.round(im.height*sc));cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height);resolve(cv.toDataURL("image/jpeg",.72));};im.src=rd.result;};rd.readAsDataURL(file);});
   enter([$("#pubCard")], { y: 16 });
   const setErr = (f, m) => { $("#" + f).classList.toggle("bad", !!m); $("#" + f + " .err").textContent = m || ""; };
@@ -1659,7 +1664,25 @@ function initPublic(){
   };
   $$(".motivo-opt").forEach(b=>b.onclick=()=>setMotivo(b.dataset.motivo));
   cartaoPub.oninput=()=>{cartaoPub.value=cartaoPub.value.replace(/\D/g,"").slice(0,17);setErr("fCartao")};
-  selfieIn.onchange=async()=>{setErr("fSelfie");const f=selfieIn.files&&selfieIn.files[0];if(!f){selfieData="";$("#selfiePrev").textContent="FOTO";return}selfieData="";$("#selfiePrev").textContent="FOTO";if(!f.type.startsWith("image/")){setErr("fSelfie","Escolha uma imagem.");selfieIn.value="";return}try{selfieData=await resizeSelfie(f);$("#selfiePrev").innerHTML=`<img src="${selfieData}" alt="Prévia da selfie">`;}catch{setErr("fSelfie","Não foi possível ler esta foto.");}};
+  selfieIn.onchange = () => {
+    const version = ++photoVersion;
+    selfieData = ""; setErr("fSelfie"); $("#selfiePrev").textContent = "FOTO";
+    const file = selfieIn.files?.[0];
+    if (!file) { selfieTask = null; return; }
+    selfieTask = (async () => {
+      try {
+        if (!file.type.startsWith("image/")) throw new Error("Escolha uma imagem.");
+        if (file.size > 10 * 1024 * 1024) throw new Error("Escolha uma foto com até 10 MB.");
+        const photo = await resizeSelfie(file);
+        if (photo.length > 200000) throw new Error("Escolha uma foto menor ou tire outra foto.");
+        if (version !== photoVersion) return;
+        selfieData = photo;
+        $("#selfiePrev").innerHTML = photoHtml(photo, true);
+      } catch (error) {
+        if (version === photoVersion) setErr("fSelfie", error.message || "Não foi possível ler esta foto.");
+      }
+    })();
+  };
   $("#pubForm").onsubmit = async e => {
     e.preventDefault();
     const n = normName(nome.value), c = onlyDigits(cpf.value), x = ext.value.trim(), mo = motivo.value, cardPub=cartaoPub.value.trim();
@@ -1669,13 +1692,15 @@ function initPublic(){
     if (!x) { setErr("fExt", "Informe seu EXT."); ok = false; }
     if (!mo) { setErr("fMotivo", "Escolha uma opção."); ok = false; }
     if (mo==="Tenho cartão" && !/^\d{17}$/.test(cardPub)) { setErr("fCartao","Informe os 17 dígitos do Cartão Lenel."); ok=false; }
-    if (!selfieData) { setErr("fSelfie",""); }
+    if (selfieTask) await selfieTask;
+    if (selfieIn.files?.length && !selfieData) { setErr("fSelfie", "A foto não foi carregada. Escolha outra imagem ou remova o arquivo."); ok = false; }
     if (!ok) return;
     const btn = $("#pubSend"), label = btn.textContent; btn.disabled = true; btn.textContent = "Enviando…";
     const t = nowIso();
+    const photoPatch = selfieData ? { selfie_data: selfieData } : {};
     try {
       if (mo === "Tenho cartão") {
-        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, cartao:cardPub, updated_at:t }], "cpf");
+        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, cartao:cardPub, updated_at:t, ...photoPatch }], "cpf");
         $("#doneTitle").textContent = "Cadastro enviado";
         $("#doneText").textContent = "Seus dados foram salvos no controle. Não precisa fazer mais nada.";
       } else {
@@ -1684,7 +1709,7 @@ function initPublic(){
           setErr("fCpf", "Já existe um pedido em andamento para este CPF. Aguarde o retorno.");
           btn.disabled = false; btn.textContent = label; return;
         }
-        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, updated_at:t }], "cpf");
+        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, updated_at:t, ...photoPatch }], "cpf");
         const r=await store.insert(T.pedidos,{nome:n,cpf:c,ext:x,motivo:mo,status:"pendente",email_status:"nao_enviado"});
         $("#doneTitle").textContent = "Pedido enviado";
         $("#doneText").innerHTML = `Protocolo <b class="mono">${esc(String(r.id).replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase())}</b>. Seu pedido vai para aprovação e depois para o setor que emite os cartões.`;
@@ -1693,13 +1718,13 @@ function initPublic(){
       enter([$("#pubDone")], { y: 16 });
     } catch (err) {
       console.error(err);
-      setErr("fMotivo", "Não foi possível enviar agora. Confira a conexão e tente novamente.");
+      setErr("fMotivo", /selfie_data|PGRST204|42703/.test(String(err.message || err.code)) ? "O armazenamento de fotos ainda precisa ser ativado no Controle Lenel. Avise o responsável e tente novamente depois." : "Não foi possível enviar agora. Confira a conexão e tente novamente.");
     }
     btn.disabled = false; btn.textContent = label;
   };
   $("#pubAgain").onclick = () => {
     $("#pubForm").reset();
-    selfieData=""; $("#selfiePrev").textContent="FOTO";
+    selfieData=""; selfieTask=null; photoVersion++; $("#selfiePrev").textContent="FOTO";
     $("#cardExtra").hidden=true; $("#cardExtra").style.display="none";
     ["fNome","fCpf","fExt","fMotivo","fCartao","fSelfie"].forEach(f=>setErr(f));
     motivo.value=""; $$(".motivo-opt").forEach(b=>{b.classList.remove("primary");b.setAttribute("aria-pressed","false")}); $("#pubSend").textContent = "Enviar";
@@ -1736,4 +1761,5 @@ addEventListener("hashchange", () => { if (location.hostname === CONFIG.FORM_ONL
 </script>
 </body>
 </html>
+
 
