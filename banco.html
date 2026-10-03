@@ -344,7 +344,7 @@ body.embed::before{display:none}
       <h1>Banco Lenel</h1>
       <span class="live off" id="liveTag"><span class="dot"></span><span id="liveTxt">CONECTANDO</span></span>
     </div>
-    <span class="ro">Somente consulta</span>
+    <span class="ro">Consulta e edição</span>
     <button class="iconbtn" id="themeBtn" title="Alternar tema" aria-label="Alternar tema"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
   </div>
 </header>
@@ -354,7 +354,7 @@ body.embed::before{display:none}
     <div class="ph">
       <div>
         <h2>Banco de dados <span class="c" id="bancoCount"></span></h2>
-        <p>Cadastros do Cartão Lenel. Esta página só mostra os dados; alterações são feitas pela equipe do Controle Lenel.</p>
+        <p>Cadastros do Cartão Lenel. Clique em Editar para corrigir nome, CPF, EXT ou número do cartão.</p>
       </div>
       <div class="toolbar">
         <div class="chips" id="bancoChips"><button class="chip on" data-bf="">Todos</button><button class="chip" data-bf="com">Com cartão</button><button class="chip" data-bf="pend">Pendentes</button><button class="chip" data-bf="sem">Sem cartão</button></div>
@@ -363,24 +363,29 @@ body.embed::before{display:none}
     </div>
     <div class="tablebox">
       <table>
-        <thead><tr><th>Foto</th><th>Nome completo</th><th>CPF</th><th>EXT</th><th>Nº do cartão</th><th>Atualizado</th></tr></thead>
+        <thead><tr><th>Foto</th><th>Nome completo</th><th>CPF</th><th>EXT</th><th>Nº do cartão</th><th>Atualizado</th><th class="r">Ações</th></tr></thead>
         <tbody id="bancoBody"></tbody>
       </table>
     </div>
   </section>
 </main>
+<div id="sheetRoot"></div><div class="toast" id="toast" hidden></div>
 <div class="viewer" id="viewer" hidden><figure><img id="viewerImg" alt=""><figcaption id="viewerCap"></figcaption><button class="btn small" id="viewerClose" style="margin-top:10px">Fechar</button></figure></div>
 <script>
-/* Página só de consulta do banco do Controle Lenel — não grava nada. */
+/* Página de consulta e edição do banco do Controle Lenel — só edita nome, CPF, EXT e cartão (não exclui nem cria). */
 const SUPABASE_URL = "https://cjentqthseecgizptyqe.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqZW50cXRoc2VlY2dpenB0eXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxMDY0MTIsImV4cCI6MjEwNTY4MjQxMn0.UWIWzQIEZOWQ2RPOyPmsD3Jo2A6G90W9Rwl1rtEQZv0";
-const MOSTRAR_CPF_COMPLETO = false; // true = mostra o CPF inteiro na tabela
+const MOSTRAR_CPF_COMPLETO = true;  // true = mostra o CPF inteiro na tabela
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const onlyDigits = v => String(v ?? "").replace(/\D/g, "");
 const fmtCpf = v => { const d = onlyDigits(v).padStart(11, "0").slice(-11); return MOSTRAR_CPF_COMPLETO ? `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}` : `***.${d.slice(3,6)}.${d.slice(6,9)}-**`; };
 const dt = iso => iso ? new Date(iso).toLocaleString("pt-BR", {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"}) : "–";
+const maskCpf = v => { const d = onlyDigits(v).slice(0, 11); let o = d.slice(0,3); if (d.length > 3) o += "." + d.slice(3,6); if (d.length > 6) o += "." + d.slice(6,9); if (d.length > 9) o += "-" + d.slice(9); return o; };
+function cpfValido(v){ const d = onlyDigits(v); if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false; const calc = n => { let s = 0; for (let i = 0; i < n; i++) s += +d[i] * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; return calc(9) === +d[9] && calc(10) === +d[10]; }
+const normName = s => String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase().replace(/(^|\s)(\S)/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(Da|De|Do|Das|Dos|E)\b/g, w => w.toLowerCase());
+let toastT; function toast(msg){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
 const okPhoto = p => /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(p || "") && p.length <= 200000;
 
 const S = { cartoes: [], pedidos: [], loaded: false, q: "", bf: "" };
@@ -392,7 +397,7 @@ function bancoStatus(c){
   const tem = S.pedidos.some(x => x.cpf === c.cpf && x.motivo === "Tenho cartão");
   return tem ? '<span class="pill p-idle">Tem cartão · sem nº</span>' : '<span class="pill p-warn">Sem cartão</span>';
 }
-function skeleton(){ return Array.from({length:6},()=>`<tr>${Array.from({length:6},(_,i)=>`<td><div class="sk" style="height:14px;width:${40+(i*13)%40}%"></div></td>`).join("")}</tr>`).join(""); }
+function skeleton(){ return Array.from({length:6},()=>`<tr>${Array.from({length:7},(_,i)=>`<td><div class="sk" style="height:14px;width:${40+(i*13)%40}%"></div></td>`).join("")}</tr>`).join(""); }
 function render(){
   const body = $("#bancoBody");
   if (!S.loaded) { body.innerHTML = skeleton(); return; }
@@ -401,8 +406,8 @@ function render(){
     .filter(c => !S.bf || (S.bf === "pend" ? /Pendente|setor/.test(bancoStatus(c)) : S.bf === "com" ? !!c.cartao : !c.cartao))
     .filter(c => !q || String(c.nome).toLowerCase().includes(q) || String(c.ext||"").toLowerCase().includes(q) || (qd && (String(c.cpf).includes(qd) || String(c.cartao||"").includes(qd))));
   $("#bancoCount").textContent = q || S.bf ? `${rows.length} de ${S.cartoes.length}` : `${S.cartoes.length} pessoas`;
-  if (!S.cartoes.length) { body.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>Nenhum cadastro ainda</strong>Os cadastros aparecem aqui assim que forem feitos no Controle Lenel.</div></td></tr>`; return; }
-  if (!rows.length) { body.innerHTML = `<tr><td colspan="6"><div class="empty">Nada encontrado para “${esc(S.q)}”.</div></td></tr>`; return; }
+  if (!S.cartoes.length) { body.innerHTML = `<tr><td colspan="7"><div class="empty"><strong>Nenhum cadastro ainda</strong>Os cadastros aparecem aqui assim que forem feitos no Controle Lenel.</div></td></tr>`; return; }
+  if (!rows.length) { body.innerHTML = `<tr><td colspan="7"><div class="empty">Nada encontrado para “${esc(S.q)}”.</div></td></tr>`; return; }
   body.innerHTML = rows.map(c => `<tr>
     <td>${okPhoto(c.selfie_data) ? `<button class="photo-btn" data-id="${esc(c.id)}" aria-label="Ampliar foto de ${esc(c.nome)}"><img src="${esc(c.selfie_data)}" alt="" style="width:44px;height:52px;object-fit:cover;border-radius:10px;display:block" loading="lazy"></button>` : '<span class="muted">Sem foto</span>'}</td>
     <td class="name">${esc(c.nome)}</td>
@@ -410,6 +415,7 @@ function render(){
     <td class="mono">${esc(c.ext) || '<span class="muted">–</span>'}</td>
     <td>${c.cartao ? `<span class="cardno">${esc(c.cartao)}</span>` : ""} ${bancoStatus(c)}</td>
     <td class="muted">${dt(c.updated_at || c.created_at)}</td>
+    <td class="r"><button class="btn small ghost" data-edit="${esc(c.id)}">Editar</button></td>
   </tr>`).join("");
 }
 function setLive(state, txt){ const t=$("#liveTag"); t.className="live"+(state==="ok"?"":" off"); $("#liveTxt").textContent=txt; }
@@ -433,10 +439,44 @@ async function load(){
 
 $("#bancoSearch").oninput = e => { S.q = e.target.value; render(); };
 $("#bancoChips").onclick = e => { const b = e.target.closest(".chip"); if (!b) return; S.bf = b.dataset.bf; $$("#bancoChips .chip").forEach(x => x.classList.toggle("on", x === b)); render(); };
-$("#bancoBody").onclick = e => { const b = e.target.closest(".photo-btn"); if (!b) return; const c = S.cartoes.find(x => x.id === b.dataset.id); if (!c) return; $("#viewerImg").src = c.selfie_data; $("#viewerImg").alt = "Foto de " + c.nome; $("#viewerCap").textContent = c.nome; $("#viewer").hidden = false; $("#viewerClose").focus(); };
+function closeSheet(){ $("#sheetRoot").innerHTML = ""; }
+function openEdit(c){
+  $("#sheetRoot").innerHTML = `<div class="scrim" data-close></div><aside class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-h"><h3 id="sheetTitle">Editar cadastro</h3><button class="iconbtn" data-close aria-label="Fechar">✕</button></div>
+    <form id="personForm" style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <div class="field"><label for="eNome">Nome completo</label><input id="eNome" value="${esc(c.nome)}" required></div>
+      <div class="field"><label for="eCpf">CPF</label><input id="eCpf" value="${esc(maskCpf(c.cpf))}" inputmode="numeric" maxlength="14" required></div>
+      <div class="field"><label for="eExt">EXT</label><input id="eExt" value="${esc(c.ext)}"></div>
+      <div class="field"><label for="eCartao">Número do cartão</label><input id="eCartao" value="${esc(c.cartao)}" inputmode="numeric"><span class="hint">Pode ficar em branco até o setor devolver o número.</span></div>
+      <div class="field"><span class="err" id="eErr"></span></div>
+      <div class="toolbar"><button class="btn primary" type="submit">Salvar alterações</button><button class="btn ghost" type="button" data-close>Cancelar</button></div>
+    </form></aside>`;
+  $$("#sheetRoot [data-close]").forEach(x => x.onclick = closeSheet);
+  $("#eNome").focus();
+  $("#eCpf").oninput = e => e.target.value = maskCpf(e.target.value);
+  $("#personForm").onsubmit = async ev => {
+    ev.preventDefault();
+    const nome = normName($("#eNome").value), cpf = onlyDigits($("#eCpf").value), ext = $("#eExt").value.trim(), cartao = $("#eCartao").value.trim();
+    const err = $("#eErr"); err.textContent = "";
+    if (nome.split(" ").length < 2) return err.textContent = "Informe nome e sobrenome.";
+    if (!cpfValido(cpf)) return err.textContent = "CPF inválido. Confira os 11 dígitos.";
+    const dupCpf = S.cartoes.find(x => x.cpf === cpf && x.id !== c.id);
+    if (dupCpf) return err.textContent = `Este CPF já está cadastrado para ${dupCpf.nome}.`;
+    const dupCard = cartao && S.cartoes.find(x => x.cartao === cartao && x.id !== c.id);
+    if (dupCard) return err.textContent = `O cartão ${cartao} já pertence a ${dupCard.nome}.`;
+    const btn = $("#personForm button[type=submit]"); if (btn.disabled) return; btn.disabled = true; btn.textContent = "Salvando…";
+    try {
+      const { data, error } = await sb.from("lenel_cartoes").update({ nome, cpf, ext, cartao, updated_at: new Date().toISOString() }).eq("id", c.id).select("id");
+      if (error) throw error;
+      if (!data || !data.length) throw new Error("o banco não confirmou a alteração (sem permissão para editar).");
+      closeSheet(); toast("Cadastro atualizado"); load();
+    } catch (e) { err.textContent = "Não salvou: " + ((e && (e.message || e.code)) || "erro desconhecido"); btn.disabled = false; btn.textContent = "Salvar alterações"; }
+  };
+}
+$("#bancoBody").onclick = e => { const ed = e.target.closest("[data-edit]"); if (ed) { const c = S.cartoes.find(x => x.id === ed.dataset.edit); if (c && sb) openEdit(c); return; } const b = e.target.closest(".photo-btn"); if (!b) return; const c = S.cartoes.find(x => x.id === b.dataset.id); if (!c) return; $("#viewerImg").src = c.selfie_data; $("#viewerImg").alt = "Foto de " + c.nome; $("#viewerCap").textContent = c.nome; $("#viewer").hidden = false; $("#viewerClose").focus(); };
 $("#viewerClose").onclick = () => $("#viewer").hidden = true;
 $("#viewer").onclick = e => { if (e.target.id === "viewer") $("#viewer").hidden = true; };
-addEventListener("keydown", e => { if (e.key === "Escape") $("#viewer").hidden = true; });
+addEventListener("keydown", e => { if (e.key === "Escape") { $("#viewer").hidden = true; closeSheet(); } });
 $("#errRetry").onclick = load;
 (function theme(){
   let saved = null; try { saved = localStorage.getItem("lenel_theme"); } catch {}
