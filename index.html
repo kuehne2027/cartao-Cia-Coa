@@ -349,6 +349,7 @@ body.embed::before{display:none}
         <button class="tab" data-tab="form">Formulário <span class="cnt z" id="cntForm">0</span></button>
         <button class="tab" data-tab="pedidos">Pedidos de cartão <span class="cnt z" id="cntPed">0</span></button>
         <button class="tab" data-tab="envio">Envio ao cadastro <span class="cnt z" id="cntEnv">0</span></button>
+        <button class="tab" data-tab="historico">Histórico de e-mails</button>
         <button class="tab" data-tab="config">Configurações</button>
       </nav>
       <button class="iconbtn" id="themeBtn" title="Alternar tema" aria-label="Alternar tema">
@@ -534,6 +535,14 @@ body.embed::before{display:none}
     </section>
 
     <!-- ===== Aba: Configurações ===== -->
+<section class="panel" data-pane="historico" hidden>
+<div class="panel-h"><h2>Histórico de e-mails</h2><p class="hint">Cada envio mantém uma cópia dos dados das pessoas. Envios pelo Gmail/Outlook são confirmados manualmente. Aceito pelo serviço não confirma entrega na caixa do destinatário.</p></div>
+<div class="toolbar" style="padding:16px;flex-wrap:wrap">
+<label>De <input type="date" id="histStart"></label><label>Até <input type="date" id="histEnd"></label>
+<input id="histSearch" placeholder="Buscar nome, CPF, EXT ou responsável" style="flex:1;min-width:220px">
+<select id="histStatus"><option value="">Todos os status</option><option value="enviado">Aceito pelo serviço</option><option value="manual">Confirmado manualmente</option><option value="falha">Falha</option><option value="anterior">Registro anterior</option></select>
+<button class="btn" id="histClear">Limpar filtros</button><button class="btn primary" id="histExport">Exportar Excel</button></div>
+<div id="histInfo" class="hint" style="padding:0 16px 12px"></div><div id="histRows" style="padding:0 16px 20px"></div></section>
     <section class="panel" data-pane="config" hidden>
       <div class="ph">
         <div>
@@ -832,7 +841,7 @@ function setLive(s){
 function renderAll(first){
   $("#errBanner").hidden = !S.loadError;
   $("#errText").textContent = S.loadError || "";
-  renderKpis(); renderBanco(); renderPedidos(); renderEnvio(); renderConfig(); renderFormLink(); renderFeed();
+  renderKpis(); renderBanco(); renderPedidos(); renderEnvio(); renderConfig(); renderFormLink(); renderFeed(); renderMailHistory();
   if (first) { enter(".bento > .cell", { step: .06, y: 14 }); enter(`[data-pane="${S.tab}"]`, { y: 8 }); }
 }
 function cardByCpf(cpf){ return S.cartoes.find(c => c.cpf === cpf); }
@@ -1121,8 +1130,8 @@ function chunkPeople(ps, intro, close){
   if (cur.length) out.push(cur);
   return out;
 }
-async function ejSend(params){
-  return emailjs.send(cfg("service"), cfg("template"), params, { publicKey: cfg("key") });
+async function ejSend(params, people){
+  return auditedMailSend(cfg("service"), cfg("template"), params, { publicKey: cfg("key") }, people);
 }
 $("#cSend").onclick = async () => {
   const c = checkCompose(); if (!c) return;
@@ -1138,7 +1147,7 @@ $("#cSend").onclick = async () => {
         subject: c.subject + (parts.length > 1 ? ` (parte ${i + 1} de ${parts.length})` : ""),
         reply_to: c.asst?.email || "", from_name: c.asst?.nome || "Controle Lenel",
         mensagem_html: composeHtml(parts[i], c.intro, c.close)
-      });
+      }, parts[i]);
       await markSent(parts[i], c.asst); sent += parts[i].length;
     }
     toast(parts.length > 1 ? `${parts.length} e-mails enviados com ${sent} pessoas` : `E-mail enviado com ${sent} pessoas`, 4000);
@@ -1182,6 +1191,8 @@ $("#cCopy").onclick = async () => {
 };
 $("#cMark").onclick = async () => {
   const ps = selPeople(); if (!ps.length) return;
+  const c = checkCompose(); if (!c) return;
+  await recordMailHistory(makeMailHistory(c.ps, {to_email:MAIL.to.join(","),cc_email:c.cc.join(","),subject:c.subject,from_name:c.asst?.nome,reply_to:c.asst?.email}, "manual"));
   await markSent(ps); toast(`${ps.length} marcados como enviados ao setor`);
 };
 $("#cSaveDef").onclick = async () => {
@@ -1292,12 +1303,12 @@ const subjectFor = p => cfg("subject").replace(/\{nome\}/g, p.nome).replace(/\{c
 
 async function sendMail(p){
   if (!mailReady()) throw new Error(cfg("to") ? "EmailJS não configurado" : "E-mail do setor não definido");
-  return emailjs.send(cfg("service"), cfg("template"), {
+  return auditedMailSend(cfg("service"), cfg("template"), {
     to_email: cfg("to"), cc_email: cfg("cc"), subject: subjectFor(p),
     nome: p.nome, cpf: fmtCpf(p.cpf), ext: p.ext || "-", motivo: p.motivo || "-",
     data_pedido: dtFull(p.created_at), data_aprovacao: dtFull(p.aprovado_em || nowIso()),
     mensagem_html: mailHtml(p)
-  }, { publicKey: cfg("key") });
+  }, { publicKey: cfg("key") }, [p]);
 }
 async function dispatchMail(p, manual = false){
   if (!mailReady()) {
@@ -1343,10 +1354,10 @@ async function dispatchBatch(ps, manual = false){
   const ids = ps.map(p => p.id);
   const subject = `Pedidos de cartão Lenel — ${ps.length} pessoas — ${new Date().toLocaleDateString("pt-BR")}`;
   try {
-    await emailjs.send(cfg("service"), cfg("template"), {
+    await auditedMailSend(cfg("service"), cfg("template"), {
       to_email: cfg("to"), cc_email: cfg("cc"), subject, nome: `${ps.length} pessoas`, cpf: "", ext: "",
       mensagem_html: batchHtml(ps)
-    }, { publicKey: cfg("key") });
+    }, { publicKey: cfg("key") }, ps);
     await store.updateMany(T.pedidos, ids, { email_status: "enviado", email_enviado_em: nowIso(), email_erro: null });
     toast(`1 e-mail enviado ao setor com ${ps.length} pessoas`, 3500);
   } catch (e) {
@@ -1475,7 +1486,7 @@ $("#bancoChips").onclick = e => { const b = e.target.closest("[data-bf]"); if (!
 
 /* ---------- tabs ---------- */
 function setTab(t){
-  if (!["banco", "form", "pedidos", "envio", "config"].includes(t)) t = "banco";
+  if (!["banco", "form", "pedidos", "envio", "historico", "config"].includes(t)) t = "banco";
   if (t === "form" && !$("#formFrame").getAttribute("src")) $("#formFrame").src = localFormUrl();
   if (t === "form") { S.seenForm = Date.now(); try { localStorage.setItem("lenel_seen_form", S.seenForm); } catch {} renderFeed(); }
   S.tab = t;
@@ -1790,6 +1801,63 @@ function initPublic(){
     $("#pubDone").hidden = true; $("#pubCard").hidden = false; nome.focus();
   };
 }
+
+
+/* Histórico: um registro independente por tentativa; pendências locais são reenviadas sem duplicar a chave. */
+const HIST_PREFIX = "mail_history_";
+const HIST_LOCAL = "lenel_mail_history_pending_v1";
+let historyBusy = false;
+function pendingHistory(){ try { return JSON.parse(localStorage.getItem(HIST_LOCAL) || "[]"); } catch { return []; } }
+function savePendingHistory(rows){ try { localStorage.setItem(HIST_LOCAL, JSON.stringify(rows)); return true; } catch { return false; } }
+function makeMailHistory(people, params, status, error=""){
+ return {id:uid(), date:nowIso(), status, error:String(error), subject:params.subject||"", to:params.to_email||"", cc:params.cc_email||"", responsible:params.from_name||"Não informado", responsible_email:params.reply_to||"", people:(people||[]).map(p=>({id:p.id||"",nome:p.nome,cpf:p.cpf,ext:p.ext||"",motivo:p.motivo||""}))};
+}
+async function recordMailHistory(entry){
+ const pending=pendingHistory(); pending.push(entry);
+ const cached=savePendingHistory(pending);
+ try { await store.upsert(T.config,[{key:HIST_PREFIX+entry.id,value:JSON.stringify(entry)}],"key"); S.cfg[HIST_PREFIX+entry.id]=JSON.stringify(entry); savePendingHistory(pendingHistory().filter(r=>r.id!==entry.id)); }
+ catch(e){ toast(cached ? "Histórico pendente de sincronização. Mantenha este navegador para tentar novamente." : "Não foi possível salvar o histórico deste envio. Anote os dados antes de fechar.",8000); }
+ renderMailHistory();
+}
+async function auditedMailSend(service, template, params, options, people){
+ const entry=makeMailHistory(people,params,"enviado");
+ let response;
+ try { response=await emailjs.send(service,template,params,options); }
+ catch(e){ entry.status="falha";entry.error=e?.text||e?.message||String(e); await recordMailHistory(entry);throw e; }
+ await recordMailHistory(entry); return response;
+}
+async function syncPendingHistory(){
+ if(historyBusy||!S.loaded)return;historyBusy=true;
+ try { for(const row of pendingHistory()){ await store.upsert(T.config,[{key:HIST_PREFIX+row.id,value:JSON.stringify(row)}],"key"); S.cfg[HIST_PREFIX+row.id]=JSON.stringify(row);savePendingHistory(pendingHistory().filter(p=>p.id!==row.id)); } }
+ catch(e){ console.warn("Histórico aguardando sincronização",e.message); } finally {historyBusy=false;renderMailHistory();}
+}
+function mailHistoryRows(){
+ const map=new Map();
+ for(const [k,v] of Object.entries(S.cfg)){if(k.startsWith(HIST_PREFIX)){try{const row=JSON.parse(v);if(row.id&&Array.isArray(row.people))map.set(row.id,row);}catch{}}}
+ for(const row of pendingHistory())map.set(row.id,{...row,pending:true});
+ const recorded=new Set([...map.values()].filter(r=>r.status!=="falha").flatMap(r=>r.people.map(p=>p.id)));
+ for(const p of S.pedidos){if(p.email_enviado_em&&!recorded.has(p.id))map.set("old_"+p.id,{id:"old_"+p.id,date:p.email_enviado_em,status:"anterior",responsible:p.email_por||"Não registrado",subject:"Envio anterior — dados disponíveis no pedido",to:"Não registrado",cc:"Não registrado",people:[{id:p.id,nome:p.nome,cpf:p.cpf,ext:p.ext||"",motivo:p.motivo||""}]});}
+ return [...map.values()].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+}
+const historyLabels={enviado:"Aceito pelo serviço",manual:"Confirmado manualmente",falha:"Falha no envio",anterior:"Registro anterior"};
+function filteredMailHistory(){
+ const start=$("#histStart").value,end=$("#histEnd").value,q=$("#histSearch").value.trim().toLowerCase(),status=$("#histStatus").value;
+ return mailHistoryRows().filter(r=>{const day=new Intl.DateTimeFormat("sv-SE",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.date));return (!start||day>=start)&&(!end||day<=end)&&(!status||status===r.status)&&(!q||[r.responsible,r.to,r.subject,...r.people.flatMap(p=>[p.nome,p.cpf,fmtCpf(p.cpf),p.ext])].join(" ").toLowerCase().includes(q));});
+}
+function renderMailHistory(){
+ if(!$("#histRows"))return;
+ const rows=filteredMailHistory();$("#histInfo").textContent=`${rows.length} registros · ${rows.reduce((n,r)=>n+r.people.length,0)} pessoas incluídas (pode haver reenvios).`;
+ $("#histRows").innerHTML=rows.length?rows.map(r=>`<details style="border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px"><summary style="cursor:pointer"><b>${esc(dtFull(r.date))}</b> · ${esc(historyLabels[r.status]||r.status)} · ${r.people.length} pessoa(s) · ${esc(r.responsible)}${r.pending?' · Pendente de sincronização':''}</summary><p><b>Assunto:</b> ${esc(r.subject)}<br><b>Para:</b> ${esc(r.to)}<br><b>Cópia:</b> ${esc(r.cc||"—")}<br><b>Responsável:</b> ${esc(r.responsible)} ${esc(r.responsible_email||"")}</p>${r.error?`<p style="color:var(--crit)">${esc(r.error)}</p>`:""}<div style="overflow:auto"><table><thead><tr><th>Nome</th><th>CPF</th><th>EXT</th><th>Tipo / justificativa</th></tr></thead><tbody>${r.people.map(p=>`<tr><td>${esc(p.nome)}</td><td>${esc(fmtCpf(p.cpf))}</td><td>${esc(p.ext)}</td><td>${esc(p.motivo)}</td></tr>`).join("")}</tbody></table></div>${r.status==="anterior"?'<p class="hint">O registro antigo não preservou destinatários nem a composição original do e-mail.</p>':""}</details>`).join(""):'<div class="empty">Nenhum envio encontrado para estes filtros.</div>';
+}
+["histStart","histEnd","histSearch","histStatus"].forEach(id=>$("#"+id).addEventListener("input",renderMailHistory));
+$("#histClear").onclick=()=>{["histStart","histEnd","histSearch","histStatus"].forEach(id=>$("#"+id).value="");renderMailHistory();};
+$("#histExport").onclick=()=>{
+ if(!window.XLSX)return toast("Biblioteca de Excel não carregou");
+ const rows=filteredMailHistory().flatMap(r=>r.people.map(p=>({"ID do envio":r.id,"Data e hora":dtFull(r.date),"Status":historyLabels[r.status],"Responsável":r.responsible,"E-mail responsável":r.responsible_email||"","Para":r.to,"Cópia":r.cc,"Assunto":r.subject,"Nome":p.nome,"CPF":fmtCpf(p.cpf),"EXT":p.ext,"Tipo / justificativa":p.motivo,"Erro":r.error||"","Sincronização":r.pending?"Pendente":"Salvo"})));
+ if(!rows.length)return toast("Nenhum registro para exportar");
+ const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows);ws["!cols"]=Object.keys(rows[0]).map(k=>({wch:k==="Nome"||k==="Para"||k==="Assunto"?38:24}));XLSX.utils.book_append_sheet(wb,ws,"Histórico de e-mails");XLSX.writeFile(wb,"historico_emails_lenel.xlsx");
+};
+setInterval(()=>{if(!document.hidden)syncPendingHistory();},30000);
 
 /* ================================================================ início */
 function initAdmin(){
