@@ -345,6 +345,12 @@ body.embed::before{display:none}
 @media(max-width:1250px){[data-pane="historico"] .toolbar{grid-template-columns:repeat(2,minmax(130px,1fr))}[data-pane="historico"] #histSearch{grid-column:1/-1}}
 @media(max-width:560px){[data-pane="historico"] .panel-h{padding:20px 16px 14px}[data-pane="historico"] .toolbar{padding:16px!important;gap:10px}[data-pane="historico"] #histStatus{grid-column:1/-1}[data-pane="historico"] #histInfo{padding:0 16px 12px!important}[data-pane="historico"] #histRows{padding:0 16px 20px!important}}
 
+/* Keep wide tables inside their own scroll area. */
+.wrap,.panel,[data-pane],.pb{min-width:0;max-width:100%}
+.tablebox{width:100%;min-width:0;max-width:100%;overflow:auto;direction:ltr}
+.tablebox table{margin:0;transform:none}
+.tablebox td.name{min-width:220px;overflow-wrap:anywhere}
+.tablebox th,.tablebox td{box-sizing:border-box}
 </style>
 </head>
 <body>
@@ -400,7 +406,7 @@ body.embed::before{display:none}
         </div>
         <div class="toolbar">
           <div class="chips" id="bancoChips"><button class="chip on" data-bf="">Todos</button><button class="chip" data-bf="com">Com cartão</button><button class="chip" data-bf="pend">Pendentes</button><button class="chip" data-bf="sem">Sem cartão</button></div>
-          <input class="search" id="bancoSearch" type="search" placeholder="Buscar nome, CPF, EXT ou cartão">
+          <input class="search" id="bancoSearch" type="search" placeholder="Buscar nome, Groot ID, CPF, EXT ou cartão">
           <button class="btn primary" id="newPerson">+ Novo cadastro</button>
           <button class="btn" id="pasteBtn">Colar lista</button>
           <button class="btn" id="exportBtn">Exportar Excel</button>
@@ -408,7 +414,7 @@ body.embed::before{display:none}
       </div>
       <div class="tablebox">
         <table>
-          <thead><tr><th>Foto</th><th>Nome completo</th><th>CPF</th><th>EXT</th><th>Nº do cartão</th><th>Atualizado</th><th class="r">Ações</th></tr></thead>
+          <thead><tr><th>Foto</th><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th><th>Nº do cartão</th><th>Atualizado</th><th class="r">Ações</th></tr></thead>
           <tbody id="bancoBody"></tbody>
         </table>
       </div>
@@ -477,7 +483,7 @@ body.embed::before{display:none}
         <table class="plain">
           <thead><tr>
             <th style="width:36px"><input type="checkbox" class="ck" id="selAll" aria-label="Selecionar todos os pendentes visíveis"></th>
-            <th>Nome completo</th><th>CPF</th><th>EXT</th><th>Motivo</th><th>Recebido</th><th>Aviso</th><th>Status</th><th class="r">Ações</th>
+            <th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th><th>Motivo</th><th>Recebido</th><th>Aviso</th><th>Status</th><th class="r">Ações</th>
           </tr></thead>
           <tbody id="pedList"></tbody>
         </table>
@@ -535,7 +541,7 @@ body.embed::before{display:none}
       </div>
       <div class="tablebox" style="max-height:70vh;border-top:1px solid var(--line-2)">
         <table class="plain">
-          <thead><tr><th style="width:36px"><input type="checkbox" class="ck" id="envAll" aria-label="Marcar todos visíveis"></th><th>Nome completo</th><th>CPF</th><th>EXT</th><th>Motivo</th><th>Aprovado</th><th>E-mail ao setor</th><th>Nº do cartão</th><th class="r"></th></tr></thead>
+          <thead><tr><th style="width:36px"><input type="checkbox" class="ck" id="envAll" aria-label="Marcar todos visíveis"></th><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th><th>Motivo</th><th>Aprovado</th><th>E-mail ao setor</th><th>Nº do cartão</th><th class="r"></th></tr></thead>
           <tbody id="envList"></tbody>
         </table>
       </div>
@@ -544,7 +550,7 @@ body.embed::before{display:none}
       </div>
       <div class="tablebox" style="max-height:320px">
         <table>
-          <thead><tr><th>Nome</th><th>CPF</th><th>EXT</th><th>Cartão</th><th>Concluído</th><th class="r"></th></tr></thead>
+          <thead><tr><th>Nome</th><th>Groot ID</th><th>CPF</th><th>EXT</th><th>Cartão</th><th>Concluído</th><th class="r"></th></tr></thead>
           <tbody id="doneBody"></tbody>
         </table>
       </div>
@@ -823,6 +829,13 @@ const DEFAULT_LOGO = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQ
 const cfg = k => (k === "logo" ? (S.cfg.logo || DEFAULT_LOGO) : ["service", "template", "key"].includes(k) ? (S.cfg[k] || cfgDefaults[k]) : (S.cfg[k] ?? cfgDefaults[k] ?? ""));
 const mailReady = () => !!(cfg("service") && cfg("template") && cfg("key") && window.emailjs);
 
+// Campo interno persistido em lenel_config, separado do formulário público.
+const grootId = p => String(p.groot_id || S.cfg["groot_id:" + onlyDigits(p.cpf || "")] || "");
+async function saveGrootId(cpf, value){
+  const key = "groot_id:" + onlyDigits(cpf);
+  await store.upsert(T.config, [{key, value: value.trim()}], "key");
+  S.cfg[key] = value.trim();
+}
 async function loadAll(first = false){
   try {
     const [c, p, g] = await Promise.all([store.list(T.cartoes), store.list(T.pedidos), store.list(T.config)]);
@@ -932,17 +945,17 @@ function photoHtml(photo, large = false){
 }
 function renderBanco(){
   const body = $("#bancoBody");
-  if (!S.loaded) { body.innerHTML = skeletonRows(6, 7); return; }
+  if (!S.loaded) { body.innerHTML = skeletonRows(6, 8); return; }
   const q = S.q.trim().toLowerCase(), qd = onlyDigits(q);
   const rows = [...S.cartoes].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).filter(c => !S.bf || (S.bf === "pend" ? /Pendente|setor/.test(bancoStatus(c)) : S.bf === "com" ? !!c.cartao : !c.cartao)).filter(c => !q ||
-    c.nome.toLowerCase().includes(q) || (c.ext || "").toLowerCase().includes(q) ||
+    grootId(c).includes(q) || c.nome.toLowerCase().includes(q) || (c.ext || "").toLowerCase().includes(q) ||
     (qd && (c.cpf.includes(qd) || (c.cartao || "").includes(qd))));
   $("#bancoCount").textContent = q ? `${rows.length} de ${S.cartoes.length}` : `${S.cartoes.length} pessoas`;
-  if (!S.cartoes.length) { body.innerHTML = `<tr><td colspan="7"><div class="empty"><strong>Banco vazio</strong>Adicione com “Novo cadastro”, cole uma lista do Excel, ou conclua um pedido na aba Envio.</div></td></tr>`; return; }
-  if (!rows.length) { body.innerHTML = `<tr><td colspan="7"><div class="empty">Nada encontrado para “${esc(S.q)}”.</div></td></tr>`; return; }
+  if (!S.cartoes.length) { body.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>Banco vazio</strong>Adicione com “Novo cadastro”, cole uma lista do Excel, ou conclua um pedido na aba Envio.</div></td></tr>`; return; }
+  if (!rows.length) { body.innerHTML = `<tr><td colspan="8"><div class="empty">Nada encontrado para “${esc(S.q)}”.</div></td></tr>`; return; }
   body.innerHTML = rows.map(c => `<tr>
     <td><button class="btn ghost small" data-act="edit" data-id="${esc(c.id)}" aria-label="Abrir cadastro de ${esc(c.nome)}">${photoHtml(c.selfie_data)}</button></td>
-    <td class="name">${esc(c.nome)}</td>
+    <td class="name">${esc(c.nome)}</td><td class="mono">${esc(grootId(c)) || "Não localizado"}</td>
     <td class="mono">${fmtCpf(c.cpf)}</td>
     <td class="mono">${esc(c.ext) || '<span class="muted">–</span>'}</td>
     <td>${c.cartao ? `<span class="cardno">${esc(c.cartao)}</span>` : ""} ${bancoStatus(c)}</td>
@@ -1084,13 +1097,13 @@ $("#cSubject").addEventListener("input", () => MAIL.subjTouched = true);
 
 function introHtml(t){ return esc(t).split(/\n{2,}/).map(par => `<p style="margin:0 0 10px">${par.replace(/\n/g, "<br>")}</p>`).join(""); }
 function peopleTable(ps){
-  return `<table cellpadding="5" cellspacing="0" border="1" style="border-collapse:collapse;border-color:#D7DDE4;font-size:13px;margin:4px 0 12px;background:#fff;color:#111C26"><tr style="background:#EEF1F4;color:#465463;text-align:left"><th>Nome completo</th><th>CPF</th><th>EXT</th></tr>${ps.map(p => `<tr><td>${esc(p.nome)}</td><td>${fmtCpf(p.cpf)}</td><td>${esc(p.ext || "-")}</td></tr>`).join("")}</table>`;
+  return `<table cellpadding="5" cellspacing="0" border="1" style="border-collapse:collapse;border-color:#D7DDE4;font-size:13px;margin:4px 0 12px;background:#fff;color:#111C26"><tr style="background:#EEF1F4;color:#465463;text-align:left"><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th></tr>${ps.map(p => `<tr><td>${esc(p.nome)}</td><td>${esc(grootId(p)) || "Não localizado"}</td><td>${fmtCpf(p.cpf)}</td><td>${esc(p.ext || "-")}</td></tr>`).join("")}</table>`;
 }
 const closing = () => $("#cClose").value.trim();
 const LOGO_URL = "https://cartao-lenel-kn.netlify.app/kn-logo.jpg";
 const logoHtml = () => `<img src="${LOGO_URL}" alt="Kuehne+Nagel" width="160" style="width:160px;height:auto;display:block;margin-top:6px;border:0">`;
 const composeHtml = (ps, intro, close = closing()) => `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111C26">${introHtml(intro)}${peopleTable(ps)}${close ? introHtml(close) : ""}${logoHtml()}</div>`;
-const composeText = (ps, intro, close = closing()) => intro + "\n\n" + ps.map(p => `${p.nome} | CPF ${fmtCpf(p.cpf)} | EXT ${p.ext || "-"}`).join("\n") + (close ? "\n\n" + close : "");
+const composeText = (ps, intro, close = closing()) => intro + "\n\n" + ps.map(p => `${p.nome} | Groot ID ${grootId(p) || "Não localizado"} | CPF ${fmtCpf(p.cpf)} | EXT ${p.ext || "-"}`).join("\n") + (close ? "\n\n" + close : "");
 
 function renderCompose(){
   const ps = selPeople(), n = ps.length;
@@ -1271,7 +1284,7 @@ const currentAsst = () => assts().find(a => a.email === myAsst) || null;
 
 function renderEnvio(){
   const box = $("#envList");
-  if (!S.loaded) { box.innerHTML = skeletonRows(6, 9); return; }
+  if (!S.loaded) { box.innerHTML = skeletonRows(6, 10); return; }
   const all = aprovados();
   syncEnvSel(all);
   initCompose(); renderCompose();
@@ -1284,7 +1297,7 @@ function renderEnvio(){
   ea.indeterminate = !ea.checked && vis.some(p => ENV.sel.has(p.id));
   box.innerHTML = rows.length ? rows.map(p => `<tr class="${ENV.sel.has(p.id) ? "esel" : ""}">
       <td><input type="checkbox" class="ck" data-act="esel" data-id="${p.id}" ${ENV.sel.has(p.id) ? "checked" : ""} aria-label="Incluir ${esc(p.nome)} no e-mail"></td>
-      <td class="name">${esc(p.nome)}</td>
+      <td class="name">${esc(p.nome)}</td><td class="mono">${esc(grootId(p)) || "Não localizado"}</td>
       <td class="mono">${fmtCpf(p.cpf)}</td>
       <td class="mono">${esc(p.ext) || "–"}</td>
       <td>${motivoTag(p.motivo)}</td>
@@ -1295,11 +1308,11 @@ function renderEnvio(){
         <button class="btn small primary" type="submit">Concluir</button></form></td>
       <td class="r">${S.confirmPed === p.id ? "" : `<button class="btn small ghost" data-act="unapprove" data-id="${p.id}" title="Voltar para pendente">Desfazer</button>`}${delBtn(p.id)}</td>
     </tr>`).join("")
-    : `<tr><td colspan="9"><div class="empty"><strong>${q ? "Nada encontrado" : "Nada aguardando o setor"}</strong>${q ? "" : "Aprove pedidos na aba Pedidos e eles aparecem aqui com o status do e-mail."}</div></td></tr>`;
+    : `<tr><td colspan="10"><div class="empty"><strong>${q ? "Nada encontrado" : "Nada aguardando o setor"}</strong>${q ? "" : "Aprove pedidos na aba Pedidos e eles aparecem aqui com o status do e-mail."}</div></td></tr>`;
   const done = S.pedidos.filter(p => p.status === "concluido").sort((a, b) => String(b.concluido_em).localeCompare(String(a.concluido_em))).slice(0, 50);
   $("#doneCount").textContent = done.length ? `${done.length}` : "";
-  $("#doneBody").innerHTML = done.length ? done.map(p => `<tr><td class="name">${esc(p.nome)}</td><td class="mono">${fmtCpf(p.cpf)}</td><td class="mono">${esc(p.ext) || "–"}</td><td><span class="cardno">${esc(p.cartao)}</span></td><td class="muted">${dt(p.concluido_em)}</td><td class="r">${delBtn(p.id)}</td></tr>`).join("")
-    : `<tr><td colspan="6"><div class="empty" style="padding:18px">Nenhum pedido concluído ainda.</div></td></tr>`;
+  $("#doneBody").innerHTML = done.length ? done.map(p => `<tr><td class="name">${esc(p.nome)}</td><td class="mono">${esc(grootId(p)) || "Não localizado"}</td><td class="mono">${fmtCpf(p.cpf)}</td><td class="mono">${esc(p.ext) || "–"}</td><td><span class="cardno">${esc(p.cartao)}</span></td><td class="muted">${dt(p.concluido_em)}</td><td class="r">${delBtn(p.id)}</td></tr>`).join("")
+    : `<tr><td colspan="7"><div class="empty" style="padding:18px">Nenhum pedido concluído ainda.</div></td></tr>`;
 }
 
 function renderConfig(){
@@ -1321,7 +1334,7 @@ async function sendMail(p){
   if (!mailReady()) throw new Error(cfg("to") ? "EmailJS não configurado" : "E-mail do setor não definido");
   return auditedMailSend(cfg("service"), cfg("template"), {
     to_email: cfg("to"), cc_email: cfg("cc"), subject: subjectFor(p),
-    nome: p.nome, cpf: fmtCpf(p.cpf), ext: p.ext || "-", motivo: p.motivo || "-",
+    nome: p.nome, groot_id: grootId(p), cpf: fmtCpf(p.cpf), ext: p.ext || "-", motivo: p.motivo || "-",
     data_pedido: dtFull(p.created_at), data_aprovacao: dtFull(p.aprovado_em || nowIso()),
     mensagem_html: mailHtml(p)
   }, { publicKey: cfg("key") }, [p]);
@@ -1552,6 +1565,7 @@ function openPerson(c){
         <div class="field"><label for="eCpf">CPF</label><input id="eCpf" value="${c.cpf ? fmtCpf(c.cpf) : ""}" inputmode="numeric" maxlength="14" required></div>
         <div class="field"><label for="eExt">EXT</label><input id="eExt" value="${esc(c.ext)}"></div>
       </div>
+      <div class="field"><label for="eGroot">Groot ID (uso dos assistentes)</label><input id="eGroot" value="${esc(grootId(c))}" inputmode="numeric"><span class="hint">Preenchido pelo Headcount. Pode ser corrigido pelo assistente.</span></div>
       <div class="field"><label for="eCartao">Número do cartão</label><input id="eCartao" value="${esc(c.cartao)}" inputmode="numeric"><span class="hint">Pode ficar em branco até o setor devolver o número.</span></div>
       <div class="field"><span class="err" id="eErr"></span></div>
       <div class="toolbar"><button class="btn primary" type="submit">${isNew ? "Adicionar ao banco" : "Salvar alterações"}</button><button class="btn ghost" type="button" data-close>Cancelar</button></div>
@@ -1591,6 +1605,7 @@ function openPerson(c){
       if (editPhotoError) throw new Error(editPhotoError);
       if (isNew) await store.insert(T.cartoes, { nome, cpf, ext, cartao, updated_at: nowIso() });
       else await store.update(T.cartoes, c.id, { nome, cpf, ext, cartao, updated_at: nowIso() });
+      await saveGrootId(cpf, $("#eGroot").value);
       await saveCadastroPhoto(cpf, editPhotoData);
       closeSheet(); toast(isNew ? "Adicionado ao banco" : "Cadastro atualizado"); loadAll();
     } catch (e) { err.textContent = "Erro ao salvar: " + e.message; btn.disabled = false; }
@@ -1630,11 +1645,11 @@ $("#pasteBtn").onclick = () => {
 /* ---------- exportar ---------- */
 $("#exportBtn").onclick = () => {
   if (!window.XLSX) return toast("Biblioteca de Excel não carregou");
-  const rows = [...S.cartoes].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).map(c => ({ "Nome completo": c.nome, "CPF": fmtCpf(c.cpf), "EXT": c.ext || "", "Nº do cartão": c.cartao || "", "Atualizado": dtFull(c.updated_at || c.created_at) }));
+  const rows = [...S.cartoes].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).map(c => ({ "Nome completo": c.nome, "Groot ID": grootId(c), "CPF": fmtCpf(c.cpf), "EXT": c.ext || "", "Nº do cartão": c.cartao || "", "Atualizado": dtFull(c.updated_at || c.created_at) }));
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rows); ws["!cols"] = [{ wch: 38 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 18 }];
   XLSX.utils.book_append_sheet(wb, ws, "Banco Lenel");
-  const ped = S.pedidos.map(p => ({ "Nome": p.nome, "CPF": fmtCpf(p.cpf), "EXT": p.ext || "", "Motivo": p.motivo || "", "Status": p.status, "E-mail": p.email_status || "", "Cartão": p.cartao || "", "Pedido em": dtFull(p.created_at), "Aprovado em": dtFull(p.aprovado_em), "Concluído em": dtFull(p.concluido_em) }));
+  const ped = S.pedidos.map(p => ({ "Nome": p.nome, "Groot ID": grootId(p), "CPF": fmtCpf(p.cpf), "EXT": p.ext || "", "Motivo": p.motivo || "", "Status": p.status, "E-mail": p.email_status || "", "Cartão": p.cartao || "", "Pedido em": dtFull(p.created_at), "Aprovado em": dtFull(p.aprovado_em), "Concluído em": dtFull(p.concluido_em) }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ped), "Pedidos");
   XLSX.writeFile(wb, `controle-lenel-${new Date().toISOString().slice(0, 10)}.xlsx`);
 };
@@ -1826,7 +1841,7 @@ let historyBusy = false;
 function pendingHistory(){ try { return JSON.parse(localStorage.getItem(HIST_LOCAL) || "[]"); } catch { return []; } }
 function savePendingHistory(rows){ try { localStorage.setItem(HIST_LOCAL, JSON.stringify(rows)); return true; } catch { return false; } }
 function makeMailHistory(people, params, status, error=""){
- return {id:uid(), date:nowIso(), status, error:String(error), subject:params.subject||"", to:params.to_email||"", cc:params.cc_email||"", responsible:params.from_name||"Não informado", responsible_email:params.reply_to||"", people:(people||[]).map(p=>({id:p.id||"",nome:p.nome,cpf:p.cpf,ext:p.ext||"",motivo:p.motivo||""}))};
+ return {id:uid(), date:nowIso(), status, error:String(error), subject:params.subject||"", to:params.to_email||"", cc:params.cc_email||"", responsible:params.from_name||"Não informado", responsible_email:params.reply_to||"", people:(people||[]).map(p=>({id:p.id||"",nome:p.nome,cpf:p.cpf,ext:p.ext||"",motivo:p.motivo||"",groot_id:grootId(p)}))};
 }
 async function recordMailHistory(entry){
  const pending=pendingHistory(); pending.push(entry);
@@ -1852,7 +1867,7 @@ function mailHistoryRows(){
  for(const [k,v] of Object.entries(S.cfg)){if(k.startsWith(HIST_PREFIX)){try{const row=JSON.parse(v);if(row.id&&Array.isArray(row.people))map.set(row.id,row);}catch{}}}
  for(const row of pendingHistory())map.set(row.id,{...row,pending:true});
  const recorded=new Set([...map.values()].filter(r=>r.status!=="falha").flatMap(r=>r.people.map(p=>p.id)));
- for(const p of S.pedidos){if(p.email_enviado_em&&!recorded.has(p.id))map.set("old_"+p.id,{id:"old_"+p.id,date:p.email_enviado_em,status:"anterior",responsible:p.email_por||"Não registrado",subject:"Envio anterior — dados disponíveis no pedido",to:"Não registrado",cc:"Não registrado",people:[{id:p.id,nome:p.nome,cpf:p.cpf,ext:p.ext||"",motivo:p.motivo||""}]});}
+ for(const p of S.pedidos){if(p.email_enviado_em&&!recorded.has(p.id))map.set("old_"+p.id,{id:"old_"+p.id,date:p.email_enviado_em,status:"anterior",responsible:p.email_por||"Não registrado",subject:"Envio anterior — dados disponíveis no pedido",to:"Não registrado",cc:"Não registrado",people:[{id:p.id,nome:p.nome,cpf:p.cpf,ext:p.ext||"",motivo:p.motivo||"",groot_id:grootId(p)}]});}
  return [...map.values()].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
 }
 const historyLabels={enviado:"Aceito pelo serviço",manual:"Confirmado manualmente",falha:"Falha no envio",anterior:"Registro anterior"};
@@ -1863,13 +1878,13 @@ function filteredMailHistory(){
 function renderMailHistory(){
  if(!$("#histRows"))return;
  const rows=filteredMailHistory();$("#histInfo").textContent=`${rows.length} registros · ${rows.reduce((n,r)=>n+r.people.length,0)} pessoas incluídas (pode haver reenvios).`;
- $("#histRows").innerHTML=rows.length?rows.map(r=>`<details style="border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px"><summary style="cursor:pointer"><b>${esc(dtFull(r.date))}</b> · ${esc(historyLabels[r.status]||r.status)} · ${r.people.length} pessoa(s) · ${esc(r.responsible)}${r.pending?' · Pendente de sincronização':''}</summary><p><b>Assunto:</b> ${esc(r.subject)}<br><b>Para:</b> ${esc(r.to)}<br><b>Cópia:</b> ${esc(r.cc||"—")}<br><b>Responsável:</b> ${esc(r.responsible)} ${esc(r.responsible_email||"")}</p>${r.error?`<p style="color:var(--crit)">${esc(r.error)}</p>`:""}<div style="overflow:auto"><table><thead><tr><th>Nome</th><th>CPF</th><th>EXT</th><th>Tipo / justificativa</th></tr></thead><tbody>${r.people.map(p=>`<tr><td>${esc(p.nome)}</td><td>${esc(fmtCpf(p.cpf))}</td><td>${esc(p.ext)}</td><td>${esc(p.motivo)}</td></tr>`).join("")}</tbody></table></div>${r.status==="anterior"?'<p class="hint">O registro antigo não preservou destinatários nem a composição original do e-mail.</p>':""}</details>`).join(""):'<div class="empty">Nenhum envio encontrado para estes filtros.</div>';
+ $("#histRows").innerHTML=rows.length?rows.map(r=>`<details style="border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px"><summary style="cursor:pointer"><b>${esc(dtFull(r.date))}</b> · ${esc(historyLabels[r.status]||r.status)} · ${r.people.length} pessoa(s) · ${esc(r.responsible)}${r.pending?' · Pendente de sincronização':''}</summary><p><b>Assunto:</b> ${esc(r.subject)}<br><b>Para:</b> ${esc(r.to)}<br><b>Cópia:</b> ${esc(r.cc||"—")}<br><b>Responsável:</b> ${esc(r.responsible)} ${esc(r.responsible_email||"")}</p>${r.error?`<p style="color:var(--crit)">${esc(r.error)}</p>`:""}<div style="overflow:auto"><table><thead><tr><th>Nome</th><th>Groot ID</th><th>CPF</th><th>EXT</th><th>Tipo / justificativa</th></tr></thead><tbody>${r.people.map(p=>`<tr><td>${esc(p.nome)}</td><td>${esc(grootId(p)) || "Não localizado"}</td><td>${esc(fmtCpf(p.cpf))}</td><td>${esc(p.ext)}</td><td>${esc(p.motivo)}</td></tr>`).join("")}</tbody></table></div>${r.status==="anterior"?'<p class="hint">O registro antigo não preservou destinatários nem a composição original do e-mail.</p>':""}</details>`).join(""):'<div class="empty">Nenhum envio encontrado para estes filtros.</div>';
 }
 ["histStart","histEnd","histSearch","histStatus"].forEach(id=>$("#"+id).addEventListener("input",renderMailHistory));
 $("#histClear").onclick=()=>{["histStart","histEnd","histSearch","histStatus"].forEach(id=>$("#"+id).value="");renderMailHistory();};
 $("#histExport").onclick=()=>{
  if(!window.XLSX)return toast("Biblioteca de Excel não carregou");
- const rows=filteredMailHistory().flatMap(r=>r.people.map(p=>({"ID do envio":r.id,"Data e hora":dtFull(r.date),"Status":historyLabels[r.status],"Responsável":r.responsible,"E-mail responsável":r.responsible_email||"","Para":r.to,"Cópia":r.cc,"Assunto":r.subject,"Nome":p.nome,"CPF":fmtCpf(p.cpf),"EXT":p.ext,"Tipo / justificativa":p.motivo,"Erro":r.error||"","Sincronização":r.pending?"Pendente":"Salvo"})));
+ const rows=filteredMailHistory().flatMap(r=>r.people.map(p=>({"ID do envio":r.id,"Data e hora":dtFull(r.date),"Status":historyLabels[r.status],"Responsável":r.responsible,"E-mail responsável":r.responsible_email||"","Para":r.to,"Cópia":r.cc,"Assunto":r.subject,"Nome":p.nome,"Groot ID":grootId(p),"CPF":fmtCpf(p.cpf),"EXT":p.ext,"Tipo / justificativa":p.motivo,"Erro":r.error||"","Sincronização":r.pending?"Pendente":"Salvo"})));
  if(!rows.length)return toast("Nenhum registro para exportar");
  const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows);ws["!cols"]=Object.keys(rows[0]).map(k=>({wch:k==="Nome"||k==="Para"||k==="Assunto"?38:24}));XLSX.utils.book_append_sheet(wb,ws,"Histórico de e-mails");XLSX.writeFile(wb,"historico_emails_lenel.xlsx");
 };
