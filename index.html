@@ -995,7 +995,7 @@ function renderPedidos(){
   $("#cR").textContent = all.filter(p => p.status === "recusado").length;
   $("#cT").textContent = all.length;
   $$("#pedChips .chip").forEach(c => c.classList.toggle("on", c.dataset.f === S.pedFilter));
-  if (!S.loaded) { list.innerHTML = skeletonRows(8, 9); return; }
+  if (!S.loaded) { list.innerHTML = skeletonRows(8, 10); return; }
   [...S.sel].forEach(id => { if (!all.some(p => p.id === id && p.status === "pendente")) S.sel.delete(id); });
   $$("#viaChips .chip").forEach(c => c.classList.toggle("on", c.dataset.via === S.pedVia));
   const order = { primeira: 0, segunda: 1, outros: 2 };
@@ -1003,7 +1003,7 @@ function renderPedidos(){
   $("#pedCount").textContent = `${rows.length}`;
   syncBulk();
   if (!rows.length) {
-    list.innerHTML = `<tr><td colspan="9"><div class="empty"><strong>${S.pq ? "Nada encontrado" : S.pedFilter === "pendente" ? "Nenhum pedido pendente" : "Nada aqui"}</strong>${!S.pq && S.pedFilter === "pendente" ? "Copie o link acima e envie no grupo. Cada envio aparece aqui automaticamente." : ""}</div></td></tr>`;
+    list.innerHTML = `<tr><td colspan="10"><div class="empty"><strong>${S.pq ? "Nada encontrado" : S.pedFilter === "pendente" ? "Nenhum pedido pendente" : "Nada aqui"}</strong>${!S.pq && S.pedFilter === "pendente" ? "Copie o link acima e envie no grupo. Cada envio aparece aqui automaticamente." : ""}</div></td></tr>`;
     return;
   }
   const cpfCount = {};
@@ -1021,11 +1021,12 @@ function renderPedidos(){
       ? `<button class="btn small ok" data-act="approve" data-id="${p.id}">Aprovar</button><button class="btn small ghost danger" data-act="reject" data-id="${p.id}">Recusar</button>`
       : p.status === "recusado" ? `<button class="btn small ghost" data-act="reopen" data-id="${p.id}">Voltar p/ pendente</button>` : "";
     const actsAll = (S.confirmPed === p.id ? "" : acts) + delBtn(p.id);
-    const via = pedidoVia(p), group = via !== lastVia ? `<tr><td colspan="9" style="background:var(--accent-soft);font-weight:700">${({primeira:"1ª via — Novatos sem cartão",segunda:"2ª via — Perda ou problema no cartão",outros:"Outros pedidos / motivo não informado"})[via]} · ${rows.filter(row=>pedidoVia(row)===via).length} pedido(s)</td></tr>` : "";
+    const via = pedidoVia(p), group = via !== lastVia ? `<tr><td colspan="10" style="background:var(--accent-soft);font-weight:700">${({primeira:"1ª via — Novatos sem cartão",segunda:"2ª via — Perda ou problema no cartão",outros:"Outros pedidos / motivo não informado"})[via]} · ${rows.filter(row=>pedidoVia(row)===via).length} pedido(s)</td></tr>` : "";
     lastVia = via;
     return group + `<tr class="${S.sel.has(p.id) ? "selr" : ""}">
       <td>${p.status === "pendente" ? `<input type="checkbox" class="ck" data-act="sel" data-id="${p.id}" ${S.sel.has(p.id) ? "checked" : ""} aria-label="Selecionar ${esc(p.nome)}">` : ""}</td>
       <td class="name">${esc(p.nome)}</td>
+      <td class="mono">${esc(grootId(p)) || "Não localizado"}</td>
       <td class="mono">${fmtCpf(p.cpf)}</td>
       <td class="mono">${esc(p.ext) || '<span class="muted">–</span>'}</td>
       <td>${motivoTag(p.motivo)}</td>
