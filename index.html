@@ -604,7 +604,7 @@ body.embed::before{display:none}
             <div class="field"><label for="cfgKey">EmailJS · Public Key</label><input id="cfgKey" type="text" placeholder="xXxXxXxXxXxXxXxX" autocomplete="off"></div>
             <ol style="margin:0">
               <li>Crie uma conta em <b>emailjs.com</b> e em <i>Email Services</i> conecte o Gmail ou Outlook que vai enviar. Copie o <b>Service ID</b>.</li>
-              <li>Em <i>Email Templates</i> crie um modelo com: <b>To Email</b> = <code class="k">{{to_email}}</code>, <b>CC</b> = <code class="k">{{cc_email}}</code>, <b>Reply To</b> = <code class="k">{{reply_to}}</code>, <b>From Name</b> = <code class="k">{{from_name}}</code>, <b>Subject</b> = <code class="k">{{subject}}</code> e no corpo apenas <code class="k">{{{mensagem_html}}}</code>. Copie o <b>Template ID</b>.</li>
+              <li>Em <i>Email Templates</i> crie um modelo com: <b>To Email</b> = <code class="k">{{to_email}}</code>, <b>CC</b> = <code class="k">{{cc_email}}</code>, <b>Reply To</b> = <code class="k">{{reply_to}}</code>, <b>From Name</b> = <code class="k">{{from_name}}</code>, <b>Subject</b> = <code class="k">{{{subject}}}</code> (somente isso, sem código ou texto adicional no final) e no corpo apenas <code class="k">{{{mensagem_html}}}</code>. Copie o <b>Template ID</b>.</li>
               <li>Em <i>Account → General</i> copie a <b>Public Key</b>, cole acima e salve.</li>
             </ol>
             <p class="hint" style="margin:0">O plano grátis do EmailJS envia até 200 e-mails por mês.</p>
@@ -1144,7 +1144,7 @@ const MAIL = { to: [], cc: [], init: false, subjTouched: false };
 const ENV = { sel: new Set(), touched: false };
 const defaultIntro = "Olá, equipe de security,\n\nSolicito a emissão de cartão Lenel para as pessoas abaixo.";
 const defaultClose = "Obrigado.";
-const defaultSubject = n => `Pedidos de cartão Lenel — ${n} ${n === 1 ? "pessoa" : "pessoas"} — ${new Date().toLocaleDateString("pt-BR")}`;
+const defaultSubject = n => `Pedidos de cartão Lenel — ${n} ${n === 1 ? "pessoa" : "pessoas"} — ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }).replace(/\//g, "-")}`;
 function aprovados(){ return S.pedidos.filter(p => p.status === "aprovado").sort((a, b) => String(a.aprovado_em).localeCompare(String(b.aprovado_em)) || a.nome.localeCompare(b.nome, "pt-BR")); }
 function syncEnvSel(all){
   const ids = new Set(all.map(p => p.id));
@@ -1500,7 +1500,7 @@ async function dispatchBatch(ps, manual = false){
     return;
   }
   const ids = ps.map(p => p.id);
-  const subject = `Pedidos de cartão Lenel — ${ps.length} pessoas — ${new Date().toLocaleDateString("pt-BR")}`;
+  const subject = `Pedidos de cartão Lenel — ${ps.length} pessoas — ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }).replace(/\//g, "-")}`;
   try {
     await auditedMailSend(cfg("service"), cfg("template"), {
       to_email: cfg("to"), cc_email: cfg("cc"), subject, nome: `${ps.length} pessoas`, cpf: "", ext: "",
