@@ -533,8 +533,9 @@ body.embed::before{display:none}
       <div class="pb toolbar" style="padding-top:0;padding-bottom:12px">
         <input class="search" id="envSearch" type="search" placeholder="Buscar nome, CPF ou EXT">
         <div class="chips" id="envChips">
-          <button class="chip" data-es="nao">Marcar não enviados</button>
           <button class="chip" data-es="todos">Marcar todos</button>
+          <button class="chip" data-es="nao">Só não enviados</button>
+          <button class="chip" data-es="conf">Só os que conferem</button>
           <button class="chip" data-es="nenhum">Desmarcar</button>
         </div>
         <span style="flex:1"></span>
@@ -542,7 +543,7 @@ body.embed::before{display:none}
       </div>
       <div class="tablebox" style="max-height:70vh;border-top:1px solid var(--line-2)">
         <table class="plain">
-          <thead><tr><th style="width:36px"><input type="checkbox" class="ck" id="envAll" aria-label="Marcar todos visíveis"></th><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th><th>Motivo</th><th>Aprovado</th><th>E-mail ao setor</th><th>Nº do cartão</th><th class="r"></th></tr></thead>
+          <thead><tr><th style="width:36px"><input type="checkbox" class="ck" id="envAll" aria-label="Marcar todos visíveis"></th><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th><th>Conferência</th><th>Motivo</th><th>Aprovado</th><th>E-mail ao setor</th><th>Nº do cartão</th><th class="r"></th></tr></thead>
           <tbody id="envList"></tbody>
         </table>
       </div>
@@ -847,14 +848,14 @@ function grootIdx(){
   let extra = []; try { extra = JSON.parse(raw); if (!Array.isArray(extra)) extra = []; } catch {}
   const base = GROOT_BASE.split("\n").map(l => { const [g, n, h, e] = l.split("|"); return { g, n, h, e }; });
   const list = [...base, ...extra];
-  const cpf = new Map(), ext = new Map(), nome = new Map(), toks = [];
+  const cpf = new Map(), row = new Map(), ext = new Map(), nome = new Map(), toks = [];
   for (const r of list) {
     if (!r || !r.g) continue;
-    if (r.h) cpf.set(r.h, r.g); if (r.c) cpf.set(cpfHash(onlyDigits(r.c).padStart(11, "0")), r.g);
+    const hk = r.h || (r.c ? cpfHash(onlyDigits(r.c).padStart(11, "0")) : ""); if (hk) { cpf.set(hk, r.g); row.set(hk, r); }
     if (r.e) ext.set(normKey(r.e), r.g);
     if (r.n) { const k = normKey(r.n); nome.set(k, nome.has(k) && nome.get(k) !== r.g ? null : r.g); toks.push({ t: grootToks(k), g: r.g }); }
   }
-  return GROOT = { raw, list: extra, total: list.length, cpf, ext, nome, toks };
+  return GROOT = { raw, list: extra, total: list.length, cpf, row, ext, nome, toks };
 }
 // Nome digitado diferente da lista (falta ou sobra nome do meio): aceita só se houver UM candidato com mesmo primeiro nome.
 function grootPorNome(nomeTxt){
@@ -866,12 +867,49 @@ function grootPorNome(nomeTxt){
   const found = new Set(ix.toks.filter(r => r.t.length >= 2 && r.t[0] === t[0] && (has(r.t, t) || has(t, r.t))).map(r => r.g));
   return found.size === 1 ? [...found][0] : "";
 }
+const hcRow = cpf => { const c = onlyDigits(cpf || ""); return c ? grootIdx().row.get(cpfHash(c.padStart(11, "0"))) || null : null; };
+const grootManual = p => String(p.groot_id || S.cfg["groot_id:" + onlyDigits(p.cpf || "")] || "");
 const grootId = p => {
-  const manual = p.groot_id || S.cfg["groot_id:" + onlyDigits(p.cpf || "")];
-  if (manual) return String(manual);
-  const ix = grootIdx(), c = onlyDigits(p.cpf || "");
-  return String((c && ix.cpf.get(cpfHash(c.padStart(11, "0")))) || (extOf(p) && ix.ext.get(normKey(extOf(p)))) || grootPorNome(p.nome) || "");
+  const manual = grootManual(p);
+  if (manual) return manual;
+  const ix = grootIdx(), hc = hcRow(p.cpf);
+  return String((hc && hc.g) || (extOf(p) && ix.ext.get(normKey(extOf(p)))) || grootPorNome(nomeOf(p)) || "");
 };
+// Conferência: compara o cadastro com o Headcount (pelo CPF) e aponta o que não bate.
+function sameName(a, b){
+  const A = grootToks(normKey(a)), B = grootToks(normKey(b));
+  if (!A.length || !B.length || A[0] !== B[0]) return false;
+  return A.filter(t => B.includes(t)).length >= Math.min(2, A.length, B.length);
+}
+function conferir(p){
+  const out = [], hc = hcRow(p.cpf), nome = nomeOf(p), ext = extOf(p), man = grootManual(p);
+  if (hc) {
+    if (hc.n && !sameName(nome, hc.n)) out.push({ t: "crit", m: `CPF é de "${normName(hc.n)}" no Headcount` });
+    if (hc.e && ext && normKey(hc.e) !== normKey(ext)) out.push({ t: "warn", m: `EXT no Headcount: ${hc.e}`, fix: true });
+    if (hc.e && !ext) out.push({ t: "warn", m: `Sem EXT; Headcount: ${hc.e}`, fix: true });
+    if (man && man !== hc.g) out.push({ t: "warn", m: `Groot salvo ${man} ≠ Headcount ${hc.g}`, fix: true });
+  } else {
+    const g = grootId(p);
+    out.push(g ? { t: "warn", m: "CPF fora do Headcount; Groot achado pelo " + (ext && grootIdx().ext.get(normKey(ext)) === g ? "EXT" : "nome") + ", confira" }
+               : { t: "warn", m: "CPF fora do Headcount; sem Groot ID" });
+  }
+  if (ext && !/^ext[_.-]/i.test(ext)) out.push({ t: "warn", m: `EXT "${ext}" fora do padrão ext_` });
+  return out;
+}
+function conferirPill(p){
+  const c = conferir(p); if (!c.length) return '<span class="pill p-ok" title="Nome, EXT e Groot batem com o Headcount">Confere</span>';
+  const crit = c.some(x => x.t === "crit");
+  const fix = hcRow(p.cpf) && c.some(x => x.fix) ? ` <button class="btn small" data-act="hcfix" data-id="${esc(p.id)}" title="Aplica EXT e Groot ID do Headcount neste cadastro">Usar Headcount</button>` : "";
+  return `<span class="pill ${crit ? "p-crit" : "p-warn"}" title="${esc(c.map(x => x.m).join("\n"))}">${crit ? "CPF de outra pessoa?" : c.length + " a conferir"}</span>${fix}<div class="hint" style="white-space:normal;max-width:260px;margin-top:3px">${esc(c.map(x => x.m).join(" · "))}</div>`;
+}
+// Grava nome/EXT no cadastro e em todos os pedidos em andamento do mesmo CPF.
+async function salvarPessoa(cpf, patch){
+  const card = cardByCpf(cpf);
+  if (card) await store.update(T.cartoes, card.id, { ...patch, updated_at: nowIso() });
+  else await store.upsert(T.cartoes, [{ cpf, ...patch, updated_at: nowIso() }], "cpf");
+  const ids = S.pedidos.filter(x => x.cpf === cpf && ["pendente", "aprovado"].includes(x.status)).map(x => x.id);
+  if (ids.length) await store.updateMany(T.pedidos, ids, patch);
+}
 async function saveGrootId(cpf, value){
   const key = "groot_id:" + onlyDigits(cpf);
   await store.upsert(T.config, [{key, value: value.trim()}], "key");
@@ -881,6 +919,7 @@ async function saveGrootId(cpf, value){
 // Não sobrescreve um Groot já corrigido à mão. Falha aqui nunca impede o cadastro.
 async function gravarGroot(nome, cpf, ext){
   try {
+    if (hcRow(cpf)) return;
     const g = grootId({ nome, cpf, ext }); if (!g) return;
     const key = "groot_id:" + onlyDigits(cpf);
     const rows = await store.list(T.config).catch(() => []);
@@ -927,6 +966,7 @@ function renderAll(first){
 }
 function cardByCpf(cpf){ return S.cartoes.find(c => c.cpf === cpf); }
 // EXT oficial = o do cadastro no Banco; o digitado no pedido só vale se a pessoa não estiver no Banco.
+function nomeOf(p){ return String((p && p.cpf && cardByCpf(p.cpf)?.nome) || (p && p.nome) || ""); }
 function extOf(p){ return String((p && p.cpf && cardByCpf(p.cpf)?.ext) || (p && p.ext) || ""); }
 
 function delBtn(id){
@@ -1069,7 +1109,8 @@ function renderPedidos(){
     const dup = p.status === "pendente" && cpfCount[p.cpf] > 1;
     const aviso = [
       ex ? `<span class="pill p-warn" title="${ex.cartao ? "Cartão " + esc(ex.cartao) + " — pode ser 2ª via" : "Está no banco sem nº de cartão"}">No banco${ex.cartao ? " · " + esc(ex.cartao) : ""}</span>` : "",
-      dup ? `<span class="pill p-crit" title="Há outro pedido pendente com este CPF">Repetido</span>` : ""
+      dup ? `<span class="pill p-crit" title="Há outro pedido pendente com este CPF">Repetido</span>` : "",
+      conferirPill(p)
     ].join(" ");
     const acts = p.status === "pendente"
       ? `<button class="btn small ok" data-act="approve" data-id="${p.id}">Aprovar</button><button class="btn small ghost danger" data-act="reject" data-id="${p.id}">Recusar</button>`
@@ -1079,7 +1120,7 @@ function renderPedidos(){
     lastVia = via;
     return group + `<tr class="${S.sel.has(p.id) ? "selr" : ""}">
       <td>${p.status === "pendente" ? `<input type="checkbox" class="ck" data-act="sel" data-id="${p.id}" ${S.sel.has(p.id) ? "checked" : ""} aria-label="Selecionar ${esc(p.nome)}">` : ""}</td>
-      <td class="name">${esc(p.nome)}</td>
+      <td class="name">${esc(nomeOf(p))}</td>
       <td class="mono">${esc(grootId(p)) || "Não localizado"}</td>
       <td class="mono">${fmtCpf(p.cpf)}</td>
       <td class="mono">${esc(extOf(p)) || '<span class="muted">–</span>'}</td>
@@ -1107,7 +1148,7 @@ const defaultSubject = n => `Pedidos de cartão Lenel — ${n} ${n === 1 ? "pess
 function aprovados(){ return S.pedidos.filter(p => p.status === "aprovado").sort((a, b) => String(a.aprovado_em).localeCompare(String(b.aprovado_em)) || a.nome.localeCompare(b.nome, "pt-BR")); }
 function syncEnvSel(all){
   const ids = new Set(all.map(p => p.id));
-  if (!ENV.touched) ENV.sel = new Set(all.filter(p => p.email_status !== "enviado").map(p => p.id));
+  if (!ENV.touched) ENV.sel = new Set(all.map(p => p.id));
   else [...ENV.sel].forEach(id => { if (!ids.has(id)) ENV.sel.delete(id); });
 }
 const selPeople = () => aprovados().filter(p => ENV.sel.has(p.id));
@@ -1152,13 +1193,13 @@ $("#cSubject").addEventListener("input", () => MAIL.subjTouched = true);
 
 function introHtml(t){ return esc(t).split(/\n{2,}/).map(par => `<p style="margin:0 0 10px">${par.replace(/\n/g, "<br>")}</p>`).join(""); }
 function peopleTable(ps){
-  return `<table cellpadding="5" cellspacing="0" border="1" style="border-collapse:collapse;border-color:#D7DDE4;font-size:13px;margin:4px 0 12px;background:#fff;color:#111C26"><tr style="background:#EEF1F4;color:#465463;text-align:left"><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th></tr>${ps.map(p => `<tr><td>${esc(p.nome)}</td><td>${esc(grootId(p)) || "Não localizado"}</td><td>${fmtCpf(p.cpf)}</td><td>${esc(extOf(p) || "-")}</td></tr>`).join("")}</table>`;
+  return `<table cellpadding="5" cellspacing="0" border="1" style="border-collapse:collapse;border-color:#D7DDE4;font-size:13px;margin:4px 0 12px;background:#fff;color:#111C26"><tr style="background:#EEF1F4;color:#465463;text-align:left"><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th></tr>${ps.map(p => `<tr><td>${esc(nomeOf(p))}</td><td>${esc(grootId(p)) || "Não localizado"}</td><td>${fmtCpf(p.cpf)}</td><td>${esc(extOf(p) || "-")}</td></tr>`).join("")}</table>`;
 }
 const closing = () => $("#cClose").value.trim();
 const LOGO_URL = "https://cartao-lenel-kn.netlify.app/kn-logo.jpg";
 const logoHtml = () => `<img src="${LOGO_URL}" alt="Kuehne+Nagel" width="160" style="width:160px;height:auto;display:block;margin-top:6px;border:0">`;
 const composeHtml = (ps, intro, close = closing()) => `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111C26">${introHtml(intro)}${peopleTable(ps)}${close ? introHtml(close) : ""}${logoHtml()}</div>`;
-const composeText = (ps, intro, close = closing()) => intro + "\n\n" + ps.map(p => `${p.nome} | Groot ID ${grootId(p) || "Não localizado"} | CPF ${fmtCpf(p.cpf)} | EXT ${extOf(p) || "-"}`).join("\n") + (close ? "\n\n" + close : "");
+const composeText = (ps, intro, close = closing()) => intro + "\n\n" + ps.map(p => `${nomeOf(p)} | Groot ID ${grootId(p) || "Não localizado"} | CPF ${fmtCpf(p.cpf)} | EXT ${extOf(p) || "-"}`).join("\n") + (close ? "\n\n" + close : "");
 
 function renderCompose(){
   const ps = selPeople(), n = ps.length;
@@ -1176,10 +1217,32 @@ function renderCompose(){
   const ca = currentAsst();
   $("#cSign").innerHTML = (ca ? `${esc(ca.nome)}<br><span style="font-weight:400;color:var(--ink-2)">${esc(ca.cargo || "Assistente")} · Kuehne+Nagel</span>` : "") +
     (cfg("logo") ? `<div style="margin-top:6px"><span style="background:#fff;display:inline-block;padding:4px 6px;border-radius:6px"><img src="${esc(cfg("logo"))}" alt="Logo" style="height:32px;display:block"></span></div>` : "");
-  $("#cPreview").innerHTML = n ? peopleTable(ps) : `<div class="none">Marque as pessoas na lista abaixo para incluir no e-mail.</div>`;
+  if (!$("#cPreview").contains(document.activeElement)) $("#cPreview").innerHTML = n ? editTable(ps) : `<div class="none">Marque as pessoas na lista abaixo para incluir no e-mail.</div>`;
+  const tot = aprovados().length, fora = tot - n;
+  $("#cCount").textContent = `${n} de ${tot} no e-mail` + (fora ? ` · ${fora} desmarcado(s)` : "");
   ["#cSend", "#cOutlook", "#cGmail", "#cCopy", "#cMark"].forEach(id => $(id).disabled = !n);
   $("#cTest").disabled = false;
 }
+// Prévia editável: o que for corrigido aqui é salvo no cadastro da pessoa e sai no e-mail.
+function editTable(ps){
+  const inp = (p, f, v, w) => `<input class="mono" data-medit="${f}" data-cpf="${esc(p.cpf)}" value="${esc(v)}" style="width:${w};border:1px solid transparent;background:transparent;border-radius:6px;padding:3px 6px" onfocus="this.style.borderColor='var(--accent)';this.style.background='var(--surface)'" onblur="this.style.borderColor='transparent';this.style.background='transparent'">`;
+  return `<div class="hint" style="padding:8px 10px 0">Clique em Nome, Groot ID ou EXT para corrigir: salva no cadastro ao sair do campo. CPF se corrige em Banco → Editar.</div><table style="margin:4px 0 8px"><thead><tr><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th><th>Conferência</th><th></th></tr></thead><tbody>${ps.map(p => `<tr>
+    <td>${inp(p, "nome", nomeOf(p), "100%")}</td><td>${inp(p, "groot", grootId(p), "100px")}</td><td class="mono">${fmtCpf(p.cpf)}</td><td>${inp(p, "ext", extOf(p), "130px")}</td>
+    <td style="white-space:normal">${conferirPill(p)}</td><td><button class="btn small ghost" data-act="munsel" data-id="${esc(p.id)}" title="Tirar do e-mail">Tirar</button></td></tr>`).join("")}</tbody></table>`;
+}
+$("#cPreview").addEventListener("keydown", e => { if (e.target.dataset.medit && e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
+$("#cPreview").addEventListener("focusout", async e => {
+  const el = e.target, f = el.dataset?.medit; if (!f) return;
+  const cpf = el.dataset.cpf, v = el.value.trim(), p = { cpf, nome: "", ext: "" };
+  const atual = f === "nome" ? nomeOf(p) : f === "ext" ? extOf(p) : grootId(p);
+  if (v === atual) return;
+  try {
+    if (f === "nome") { if (normName(v).split(" ").length < 2) return toast("Informe nome e sobrenome"); await salvarPessoa(cpf, { nome: normName(v) }); }
+    else if (f === "ext") await salvarPessoa(cpf, { ext: v });
+    else await saveGrootId(cpf, v);
+    toast("Corrigido no cadastro"); await loadAll();
+  } catch (err) { toast("Não salvou: " + err.message, 5000); }
+});
 function checkCompose(){
   const ps = selPeople();
   if (!ps.length) { toast("Marque pelo menos uma pessoa"); return null; }
@@ -1293,7 +1356,7 @@ $("#envAll").onchange = e => {
 $("#envChips").onclick = e => {
   const b = e.target.closest("[data-es]"); if (!b) return;
   ENV.touched = true; const all = aprovados();
-  ENV.sel = new Set(b.dataset.es === "todos" ? all.map(p => p.id) : b.dataset.es === "nao" ? all.filter(p => p.email_status !== "enviado").map(p => p.id) : []);
+  ENV.sel = new Set(b.dataset.es === "todos" ? all.map(p => p.id) : b.dataset.es === "nao" ? all.filter(p => p.email_status !== "enviado").map(p => p.id) : b.dataset.es === "conf" ? all.filter(p => !conferir(p).length).map(p => p.id) : []);
   renderEnvio();
 };
 
@@ -1352,9 +1415,10 @@ function renderEnvio(){
   ea.indeterminate = !ea.checked && vis.some(p => ENV.sel.has(p.id));
   box.innerHTML = rows.length ? rows.map(p => `<tr class="${ENV.sel.has(p.id) ? "esel" : ""}">
       <td><input type="checkbox" class="ck" data-act="esel" data-id="${p.id}" ${ENV.sel.has(p.id) ? "checked" : ""} aria-label="Incluir ${esc(p.nome)} no e-mail"></td>
-      <td class="name">${esc(p.nome)}</td><td class="mono">${esc(grootId(p)) || "Não localizado"}</td>
+      <td class="name">${esc(nomeOf(p))}</td><td class="mono">${esc(grootId(p)) || "Não localizado"}</td>
       <td class="mono">${fmtCpf(p.cpf)}</td>
       <td class="mono">${esc(extOf(p)) || "–"}</td>
+      <td style="white-space:normal">${conferirPill(p)}</td>
       <td>${motivoTag(p.motivo)}</td>
       <td class="muted" title="${dtFull(p.aprovado_em)}">${ago(p.aprovado_em)}</td>
       <td>${mailPill(p)}</td>
@@ -1363,10 +1427,10 @@ function renderEnvio(){
         <button class="btn small primary" type="submit">Concluir</button></form></td>
       <td class="r">${S.confirmPed === p.id ? "" : `<button class="btn small ghost" data-act="unapprove" data-id="${p.id}" title="Voltar para pendente">Desfazer</button>`}${delBtn(p.id)}</td>
     </tr>`).join("")
-    : `<tr><td colspan="10"><div class="empty"><strong>${q ? "Nada encontrado" : "Nada aguardando o setor"}</strong>${q ? "" : "Aprove pedidos na aba Pedidos e eles aparecem aqui com o status do e-mail."}</div></td></tr>`;
+    : `<tr><td colspan="11"><div class="empty"><strong>${q ? "Nada encontrado" : "Nada aguardando o setor"}</strong>${q ? "" : "Aprove pedidos na aba Pedidos e eles aparecem aqui com o status do e-mail."}</div></td></tr>`;
   const done = S.pedidos.filter(p => p.status === "concluido").sort((a, b) => String(b.concluido_em).localeCompare(String(a.concluido_em))).slice(0, 50);
   $("#doneCount").textContent = done.length ? `${done.length}` : "";
-  $("#doneBody").innerHTML = done.length ? done.map(p => `<tr><td class="name">${esc(p.nome)}</td><td class="mono">${esc(grootId(p)) || "Não localizado"}</td><td class="mono">${fmtCpf(p.cpf)}</td><td class="mono">${esc(extOf(p)) || "–"}</td><td><span class="cardno">${esc(p.cartao)}</span></td><td class="muted">${dt(p.concluido_em)}</td><td class="r">${delBtn(p.id)}</td></tr>`).join("")
+  $("#doneBody").innerHTML = done.length ? done.map(p => `<tr><td class="name">${esc(nomeOf(p))}</td><td class="mono">${esc(grootId(p)) || "Não localizado"}</td><td class="mono">${fmtCpf(p.cpf)}</td><td class="mono">${esc(extOf(p)) || "–"}</td><td><span class="cardno">${esc(p.cartao)}</span></td><td class="muted">${dt(p.concluido_em)}</td><td class="r">${delBtn(p.id)}</td></tr>`).join("")
     : `<tr><td colspan="7"><div class="empty" style="padding:18px">Nenhum pedido concluído ainda.</div></td></tr>`;
 }
 
@@ -1481,6 +1545,17 @@ document.addEventListener("click", async e => {
   const id = b.dataset.id, act = b.dataset.act;
   if (act === "sel") { b.checked ? S.sel.add(id) : S.sel.delete(id); b.closest("tr").classList.toggle("selr", b.checked); syncBulk(); return; }
   if (act === "esel") { ENV.touched = true; b.checked ? ENV.sel.add(id) : ENV.sel.delete(id); b.closest("tr").classList.toggle("esel", b.checked); renderCompose(); const vis = $$('#envList [data-act="esel"]'); const ea = $("#envAll"); ea.checked = vis.length && vis.every(x => x.checked); ea.indeterminate = !ea.checked && vis.some(x => x.checked); return; }
+  if (act === "munsel") { ENV.touched = true; ENV.sel.delete(id); return renderEnvio(); }
+  if (act === "hcfix") {
+    const p = S.pedidos.find(x => x.id === id) || S.cartoes.find(x => x.id === id); const hc = p && hcRow(p.cpf); if (!hc) return;
+    b.disabled = true;
+    try {
+      if (hc.e && normKey(hc.e) !== normKey(extOf(p))) await salvarPessoa(p.cpf, { ext: hc.e });
+      if (grootManual(p) && grootManual(p) !== hc.g) await saveGrootId(p.cpf, "");
+      toast("Cadastro alinhado ao Headcount"); 
+    } catch (e) { toast("Não salvou: " + e.message, 5000); }
+    return loadAll();
+  }
   if (act === "approve") { b.disabled = true; return approve([id]); }
   if (act === "reject") { await store.update(T.pedidos, id, { status: "recusado" }); toast("Pedido recusado"); return loadAll(); }
   if (act === "reopen" || act === "unapprove") { await store.update(T.pedidos, id, { status: "pendente", aprovado_em: null }); toast("Pedido voltou para pendente"); return loadAll(); }
@@ -1965,7 +2040,7 @@ let historyBusy = false;
 function pendingHistory(){ try { return JSON.parse(localStorage.getItem(HIST_LOCAL) || "[]"); } catch { return []; } }
 function savePendingHistory(rows){ try { localStorage.setItem(HIST_LOCAL, JSON.stringify(rows)); return true; } catch { return false; } }
 function makeMailHistory(people, params, status, error=""){
- return {id:uid(), date:nowIso(), status, error:String(error), subject:params.subject||"", to:params.to_email||"", cc:params.cc_email||"", responsible:params.from_name||"Não informado", responsible_email:params.reply_to||"", people:(people||[]).map(p=>({id:p.id||"",nome:p.nome,cpf:p.cpf,ext:extOf(p)||"",motivo:p.motivo||"",groot_id:grootId(p)}))};
+ return {id:uid(), date:nowIso(), status, error:String(error), subject:params.subject||"", to:params.to_email||"", cc:params.cc_email||"", responsible:params.from_name||"Não informado", responsible_email:params.reply_to||"", people:(people||[]).map(p=>({id:p.id||"",nome:nomeOf(p),cpf:p.cpf,ext:extOf(p)||"",motivo:p.motivo||"",groot_id:grootId(p)}))};
 }
 async function recordMailHistory(entry){
  const pending=pendingHistory(); pending.push(entry);
