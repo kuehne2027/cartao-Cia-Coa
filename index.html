@@ -870,7 +870,7 @@ const grootId = p => {
   const manual = p.groot_id || S.cfg["groot_id:" + onlyDigits(p.cpf || "")];
   if (manual) return String(manual);
   const ix = grootIdx(), c = onlyDigits(p.cpf || "");
-  return String((c && ix.cpf.get(cpfHash(c.padStart(11, "0")))) || (p.ext && ix.ext.get(normKey(p.ext))) || grootPorNome(p.nome) || "");
+  return String((c && ix.cpf.get(cpfHash(c.padStart(11, "0")))) || (extOf(p) && ix.ext.get(normKey(extOf(p)))) || grootPorNome(p.nome) || "");
 };
 async function saveGrootId(cpf, value){
   const key = "groot_id:" + onlyDigits(cpf);
@@ -926,6 +926,8 @@ function renderAll(first){
   if (first) { enter(".bento > .cell", { step: .06, y: 14 }); enter(`[data-pane="${S.tab}"]`, { y: 8 }); }
 }
 function cardByCpf(cpf){ return S.cartoes.find(c => c.cpf === cpf); }
+// EXT oficial = o do cadastro no Banco; o digitado no pedido só vale se a pessoa não estiver no Banco.
+function extOf(p){ return String((p && p.cpf && cardByCpf(p.cpf)?.ext) || (p && p.ext) || ""); }
 
 function delBtn(id){
   return S.confirmPed === id
@@ -947,7 +949,7 @@ function renderFeed(){
       : p.status === "aprovado" ? '<span class="pill p-run">Aprovado</span>'
       : p.status === "concluido" ? '<span class="pill p-ok">Concluído</span>' : '<span class="pill p-idle">Recusado</span>';
     const isNew = S.loadedOnce && !S.feedSeen.has(p.id);
-    return `<div class="frow${isNew ? " new" : ""}"><span class="nm">${esc(p.nome)}</span><span class="tags">${motivoTag(p.motivo)} ${st} ${delBtn(p.id)}</span><span class="sub">${fmtCpf(p.cpf)} · ${esc(p.ext) || "–"} · ${ago(p.created_at)}</span></div>`;
+    return `<div class="frow${isNew ? " new" : ""}"><span class="nm">${esc(p.nome)}</span><span class="tags">${motivoTag(p.motivo)} ${st} ${delBtn(p.id)}</span><span class="sub">${fmtCpf(p.cpf)} · ${esc(extOf(p)) || "–"} · ${ago(p.created_at)}</span></div>`;
   }).join("") : `<div class="empty"><strong>Nada recebido ainda</strong>Copie o link acima e mande no grupo.</div>`;
   rows.forEach(p => S.feedSeen.add(p.id)); S.loadedOnce = true;
 }
@@ -1028,7 +1030,7 @@ function pedRows(){
   const q = (S.pq || "").trim().toLowerCase(), qd = onlyDigits(q);
   let rows = S.pedFilter === "todos" ? S.pedidos : S.pedFilter === "ativos" ? S.pedidos.filter(p=>["pendente","aprovado"].includes(p.status)) : S.pedidos.filter(p => p.status === S.pedFilter);
   if (S.pedVia !== "todos") rows = rows.filter(p => pedidoVia(p) === S.pedVia);
-  if (q) rows = rows.filter(p => p.nome.toLowerCase().includes(q) || (p.motivo || "").toLowerCase().includes(q) || (p.ext || "").toLowerCase().includes(q) || (qd && p.cpf.includes(qd)));
+  if (q) rows = rows.filter(p => p.nome.toLowerCase().includes(q) || (p.motivo || "").toLowerCase().includes(q) || extOf(p).toLowerCase().includes(q) || (qd && p.cpf.includes(qd)));
   return rows;
 }
 function syncBulk(){
@@ -1080,7 +1082,7 @@ function renderPedidos(){
       <td class="name">${esc(p.nome)}</td>
       <td class="mono">${esc(grootId(p)) || "Não localizado"}</td>
       <td class="mono">${fmtCpf(p.cpf)}</td>
-      <td class="mono">${esc(p.ext) || '<span class="muted">–</span>'}</td>
+      <td class="mono">${esc(extOf(p)) || '<span class="muted">–</span>'}</td>
       <td>${motivoTag(p.motivo)}</td>
       <td class="muted" title="${dtFull(p.created_at)}">${ago(p.created_at)}</td>
       <td>${aviso || '<span class="muted">–</span>'}</td>
@@ -1150,13 +1152,13 @@ $("#cSubject").addEventListener("input", () => MAIL.subjTouched = true);
 
 function introHtml(t){ return esc(t).split(/\n{2,}/).map(par => `<p style="margin:0 0 10px">${par.replace(/\n/g, "<br>")}</p>`).join(""); }
 function peopleTable(ps){
-  return `<table cellpadding="5" cellspacing="0" border="1" style="border-collapse:collapse;border-color:#D7DDE4;font-size:13px;margin:4px 0 12px;background:#fff;color:#111C26"><tr style="background:#EEF1F4;color:#465463;text-align:left"><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th></tr>${ps.map(p => `<tr><td>${esc(p.nome)}</td><td>${esc(grootId(p)) || "Não localizado"}</td><td>${fmtCpf(p.cpf)}</td><td>${esc(p.ext || "-")}</td></tr>`).join("")}</table>`;
+  return `<table cellpadding="5" cellspacing="0" border="1" style="border-collapse:collapse;border-color:#D7DDE4;font-size:13px;margin:4px 0 12px;background:#fff;color:#111C26"><tr style="background:#EEF1F4;color:#465463;text-align:left"><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th></tr>${ps.map(p => `<tr><td>${esc(p.nome)}</td><td>${esc(grootId(p)) || "Não localizado"}</td><td>${fmtCpf(p.cpf)}</td><td>${esc(extOf(p) || "-")}</td></tr>`).join("")}</table>`;
 }
 const closing = () => $("#cClose").value.trim();
 const LOGO_URL = "https://cartao-lenel-kn.netlify.app/kn-logo.jpg";
 const logoHtml = () => `<img src="${LOGO_URL}" alt="Kuehne+Nagel" width="160" style="width:160px;height:auto;display:block;margin-top:6px;border:0">`;
 const composeHtml = (ps, intro, close = closing()) => `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111C26">${introHtml(intro)}${peopleTable(ps)}${close ? introHtml(close) : ""}${logoHtml()}</div>`;
-const composeText = (ps, intro, close = closing()) => intro + "\n\n" + ps.map(p => `${p.nome} | Groot ID ${grootId(p) || "Não localizado"} | CPF ${fmtCpf(p.cpf)} | EXT ${p.ext || "-"}`).join("\n") + (close ? "\n\n" + close : "");
+const composeText = (ps, intro, close = closing()) => intro + "\n\n" + ps.map(p => `${p.nome} | Groot ID ${grootId(p) || "Não localizado"} | CPF ${fmtCpf(p.cpf)} | EXT ${extOf(p) || "-"}`).join("\n") + (close ? "\n\n" + close : "");
 
 function renderCompose(){
   const ps = selPeople(), n = ps.length;
@@ -1285,7 +1287,7 @@ $("#cSaveDef").onclick = async () => {
 };
 $("#envAll").onchange = e => {
   const q = (S.eq || "").trim().toLowerCase(), qd = onlyDigits(q);
-  const vis = aprovados().filter(p => !q || p.nome.toLowerCase().includes(q) || (p.ext || "").toLowerCase().includes(q) || (qd && p.cpf.includes(qd)));
+  const vis = aprovados().filter(p => !q || p.nome.toLowerCase().includes(q) || extOf(p).toLowerCase().includes(q) || (qd && p.cpf.includes(qd)));
   ENV.touched = true; vis.forEach(p => e.target.checked ? ENV.sel.add(p.id) : ENV.sel.delete(p.id)); renderEnvio();
 };
 $("#envChips").onclick = e => {
@@ -1342,7 +1344,7 @@ function renderEnvio(){
   syncEnvSel(all);
   initCompose(); renderCompose();
   const q = (S.eq || "").trim().toLowerCase(), qd = onlyDigits(q);
-  const rows = q ? all.filter(p => p.nome.toLowerCase().includes(q) || (p.ext || "").toLowerCase().includes(q) || (qd && p.cpf.includes(qd))) : all;
+  const rows = q ? all.filter(p => p.nome.toLowerCase().includes(q) || extOf(p).toLowerCase().includes(q) || (qd && p.cpf.includes(qd))) : all;
   $("#envCount").textContent = `${all.length} aguardando cartão`;
   const vis = rows;
   const ea = $("#envAll");
@@ -1352,7 +1354,7 @@ function renderEnvio(){
       <td><input type="checkbox" class="ck" data-act="esel" data-id="${p.id}" ${ENV.sel.has(p.id) ? "checked" : ""} aria-label="Incluir ${esc(p.nome)} no e-mail"></td>
       <td class="name">${esc(p.nome)}</td><td class="mono">${esc(grootId(p)) || "Não localizado"}</td>
       <td class="mono">${fmtCpf(p.cpf)}</td>
-      <td class="mono">${esc(p.ext) || "–"}</td>
+      <td class="mono">${esc(extOf(p)) || "–"}</td>
       <td>${motivoTag(p.motivo)}</td>
       <td class="muted" title="${dtFull(p.aprovado_em)}">${ago(p.aprovado_em)}</td>
       <td>${mailPill(p)}</td>
@@ -1364,7 +1366,7 @@ function renderEnvio(){
     : `<tr><td colspan="10"><div class="empty"><strong>${q ? "Nada encontrado" : "Nada aguardando o setor"}</strong>${q ? "" : "Aprove pedidos na aba Pedidos e eles aparecem aqui com o status do e-mail."}</div></td></tr>`;
   const done = S.pedidos.filter(p => p.status === "concluido").sort((a, b) => String(b.concluido_em).localeCompare(String(a.concluido_em))).slice(0, 50);
   $("#doneCount").textContent = done.length ? `${done.length}` : "";
-  $("#doneBody").innerHTML = done.length ? done.map(p => `<tr><td class="name">${esc(p.nome)}</td><td class="mono">${esc(grootId(p)) || "Não localizado"}</td><td class="mono">${fmtCpf(p.cpf)}</td><td class="mono">${esc(p.ext) || "–"}</td><td><span class="cardno">${esc(p.cartao)}</span></td><td class="muted">${dt(p.concluido_em)}</td><td class="r">${delBtn(p.id)}</td></tr>`).join("")
+  $("#doneBody").innerHTML = done.length ? done.map(p => `<tr><td class="name">${esc(p.nome)}</td><td class="mono">${esc(grootId(p)) || "Não localizado"}</td><td class="mono">${fmtCpf(p.cpf)}</td><td class="mono">${esc(extOf(p)) || "–"}</td><td><span class="cardno">${esc(p.cartao)}</span></td><td class="muted">${dt(p.concluido_em)}</td><td class="r">${delBtn(p.id)}</td></tr>`).join("")
     : `<tr><td colspan="7"><div class="empty" style="padding:18px">Nenhum pedido concluído ainda.</div></td></tr>`;
 }
 
@@ -1381,13 +1383,13 @@ function renderConfig(){
 /* ================================================================ e-mail */
 function mailText(p){ return composeText([p], cfg("intro") || defaultIntro, cfg("close") || defaultClose); }
 function mailHtml(p){ return composeHtml([p], cfg("intro") || defaultIntro, cfg("close") || defaultClose); }
-const subjectFor = p => cfg("subject").replace(/\{nome\}/g, p.nome).replace(/\{cpf\}/g, fmtCpf(p.cpf)).replace(/\{ext\}/g, p.ext || "");
+const subjectFor = p => cfg("subject").replace(/\{nome\}/g, p.nome).replace(/\{cpf\}/g, fmtCpf(p.cpf)).replace(/\{ext\}/g, extOf(p));
 
 async function sendMail(p){
   if (!mailReady()) throw new Error(cfg("to") ? "EmailJS não configurado" : "E-mail do setor não definido");
   return auditedMailSend(cfg("service"), cfg("template"), {
     to_email: cfg("to"), cc_email: cfg("cc"), subject: subjectFor(p),
-    nome: p.nome, groot_id: grootId(p), cpf: fmtCpf(p.cpf), ext: p.ext || "-", motivo: p.motivo || "-",
+    nome: p.nome, groot_id: grootId(p), cpf: fmtCpf(p.cpf), ext: extOf(p) || "-", motivo: p.motivo || "-",
     data_pedido: dtFull(p.created_at), data_aprovacao: dtFull(p.aprovado_em || nowIso()),
     mensagem_html: mailHtml(p)
   }, { publicKey: cfg("key") }, [p]);
@@ -1458,7 +1460,7 @@ async function finish(id, cartao){
   if (outro) { toast(`Cartão ${cartao} já pertence a ${outro.nome}`, 4500); return; }
   const t = nowIso();
   try {
-    await store.upsert(T.cartoes, [{ nome: p.nome, cpf: p.cpf, ext: p.ext, cartao, updated_at: t }], "cpf");
+    await store.upsert(T.cartoes, [{ nome: cardByCpf(p.cpf)?.nome || p.nome, cpf: p.cpf, ext: extOf(p), cartao, updated_at: t }], "cpf");
     await store.update(T.pedidos, id, { status: "concluido", cartao, concluido_em: t });
     toast(`${p.nome} entrou no banco com o cartão ${cartao}`);
   } catch (e) { toast("Erro ao concluir: " + e.message, 4500); }
@@ -1537,7 +1539,7 @@ $("#pasteCardsBtn").onclick = () => {
     const btn = $("#cardsGo"); btn.disabled = true; btn.textContent = "Concluindo…";
     const t = nowIso();
     try {
-      await store.upsert(T.cartoes, found.map(({ p, cartao }) => ({ nome: p.nome, cpf: p.cpf, ext: p.ext, cartao, updated_at: t })), "cpf");
+      await store.upsert(T.cartoes, found.map(({ p, cartao }) => ({ nome: cardByCpf(p.cpf)?.nome || p.nome, cpf: p.cpf, ext: extOf(p), cartao, updated_at: t })), "cpf");
       for (const { p, cartao } of found) await store.update(T.pedidos, p.id, { status: "concluido", cartao, concluido_em: t });
       closeSheet(); toast(`${found.length} pessoas concluídas e salvas no banco`, 3500);
     } catch (e) { toast("Erro: " + e.message, 5000); btn.disabled = false; btn.textContent = "Concluir encontrados"; }
@@ -1659,6 +1661,8 @@ function openPerson(c){
       if (isNew) await store.insert(T.cartoes, { nome, cpf, ext, cartao, updated_at: nowIso() });
       else await store.update(T.cartoes, c.id, { nome, cpf, ext, cartao, updated_at: nowIso() });
       await saveGrootId(cpf, $("#eGroot").value);
+      const abertos = S.pedidos.filter(x => (x.cpf === cpf || (!isNew && x.cpf === c.cpf)) && ["pendente", "aprovado"].includes(x.status)).map(x => x.id);
+      if (abertos.length) await store.updateMany(T.pedidos, abertos, { nome, cpf, ext });
       await saveCadastroPhoto(cpf, editPhotoData);
       closeSheet(); toast(isNew ? "Adicionado ao banco" : "Cadastro atualizado"); loadAll();
     } catch (e) { err.textContent = "Erro ao salvar: " + e.message; btn.disabled = false; }
@@ -1765,7 +1769,7 @@ $("#exportBtn").onclick = () => {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rows); ws["!cols"] = [{ wch: 38 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 18 }];
   XLSX.utils.book_append_sheet(wb, ws, "Banco Lenel");
-  const ped = S.pedidos.map(p => ({ "Nome": p.nome, "Groot ID": grootId(p), "CPF": fmtCpf(p.cpf), "EXT": p.ext || "", "Motivo": p.motivo || "", "Status": p.status, "E-mail": p.email_status || "", "Cartão": p.cartao || "", "Pedido em": dtFull(p.created_at), "Aprovado em": dtFull(p.aprovado_em), "Concluído em": dtFull(p.concluido_em) }));
+  const ped = S.pedidos.map(p => ({ "Nome": p.nome, "Groot ID": grootId(p), "CPF": fmtCpf(p.cpf), "EXT": extOf(p), "Motivo": p.motivo || "", "Status": p.status, "E-mail": p.email_status || "", "Cartão": p.cartao || "", "Pedido em": dtFull(p.created_at), "Aprovado em": dtFull(p.aprovado_em), "Concluído em": dtFull(p.concluido_em) }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ped), "Pedidos");
   XLSX.writeFile(wb, `controle-lenel-${new Date().toISOString().slice(0, 10)}.xlsx`);
 };
@@ -1961,7 +1965,7 @@ let historyBusy = false;
 function pendingHistory(){ try { return JSON.parse(localStorage.getItem(HIST_LOCAL) || "[]"); } catch { return []; } }
 function savePendingHistory(rows){ try { localStorage.setItem(HIST_LOCAL, JSON.stringify(rows)); return true; } catch { return false; } }
 function makeMailHistory(people, params, status, error=""){
- return {id:uid(), date:nowIso(), status, error:String(error), subject:params.subject||"", to:params.to_email||"", cc:params.cc_email||"", responsible:params.from_name||"Não informado", responsible_email:params.reply_to||"", people:(people||[]).map(p=>({id:p.id||"",nome:p.nome,cpf:p.cpf,ext:p.ext||"",motivo:p.motivo||"",groot_id:grootId(p)}))};
+ return {id:uid(), date:nowIso(), status, error:String(error), subject:params.subject||"", to:params.to_email||"", cc:params.cc_email||"", responsible:params.from_name||"Não informado", responsible_email:params.reply_to||"", people:(people||[]).map(p=>({id:p.id||"",nome:p.nome,cpf:p.cpf,ext:extOf(p)||"",motivo:p.motivo||"",groot_id:grootId(p)}))};
 }
 async function recordMailHistory(entry){
  const pending=pendingHistory(); pending.push(entry);
@@ -1987,7 +1991,7 @@ function mailHistoryRows(){
  for(const [k,v] of Object.entries(S.cfg)){if(k.startsWith(HIST_PREFIX)){try{const row=JSON.parse(v);if(row.id&&Array.isArray(row.people))map.set(row.id,row);}catch{}}}
  for(const row of pendingHistory())map.set(row.id,{...row,pending:true});
  const recorded=new Set([...map.values()].filter(r=>r.status!=="falha").flatMap(r=>r.people.map(p=>p.id)));
- for(const p of S.pedidos){if(p.email_enviado_em&&!recorded.has(p.id))map.set("old_"+p.id,{id:"old_"+p.id,date:p.email_enviado_em,status:"anterior",responsible:p.email_por||"Não registrado",subject:"Envio anterior — dados disponíveis no pedido",to:"Não registrado",cc:"Não registrado",people:[{id:p.id,nome:p.nome,cpf:p.cpf,ext:p.ext||"",motivo:p.motivo||"",groot_id:grootId(p)}]});}
+ for(const p of S.pedidos){if(p.email_enviado_em&&!recorded.has(p.id))map.set("old_"+p.id,{id:"old_"+p.id,date:p.email_enviado_em,status:"anterior",responsible:p.email_por||"Não registrado",subject:"Envio anterior — dados disponíveis no pedido",to:"Não registrado",cc:"Não registrado",people:[{id:p.id,nome:p.nome,cpf:p.cpf,ext:extOf(p)||"",motivo:p.motivo||"",groot_id:grootId(p)}]});}
  return [...map.values()].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
 }
 const historyLabels={enviado:"Aceito pelo serviço",manual:"Confirmado manualmente",falha:"Falha no envio",anterior:"Registro anterior"};
