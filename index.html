@@ -405,7 +405,7 @@ body.embed::before{display:none}
           <p>Todo mundo que preencheu o formulário. Quem pediu cartão fica como pendente até o setor devolver o número.</p>
         </div>
         <div class="toolbar">
-          <div class="chips" id="bancoChips"><button class="chip on" data-bf="">Todos</button><button class="chip" data-bf="com">Com cartão</button><button class="chip" data-bf="pend">Pendentes</button><button class="chip" data-bf="sem">Sem cartão</button></div>
+          <div class="chips" id="bancoChips"><button class="chip on" data-bf="">Todos</button><button class="chip" data-bf="com">Com cartão</button><button class="chip" data-bf="pend">Pendentes</button><button class="chip" data-bf="sem">Sem cartão</button><button class="chip" data-bf="semfoto">Sem foto</button></div>
           <input class="search" id="bancoSearch" type="search" placeholder="Buscar nome, Groot ID, CPF, EXT ou cartão">
           <button class="btn primary" id="newPerson">+ Novo cadastro</button>
           <button class="btn" id="pasteBtn">Colar lista</button>
@@ -522,6 +522,7 @@ body.embed::before{display:none}
             <button class="btn" id="cOutlook" title="Abre o Outlook ou o app de e-mail do computador já preenchido">Abrir no Outlook</button>
             <button class="btn" id="cGmail" title="Abre o Gmail já preenchido">Abrir no Gmail</button>
             <button class="btn ghost" id="cCopy">Copiar e-mail</button>
+            <button class="btn ghost" id="cPrint" title="Imprime a lista das pessoas marcadas para o e-mail">Imprimir lista</button>
             <button class="btn ghost" id="cTest" title="Abre o Gmail com o e-mail indo só para você">Testar (só para mim)</button>
             <span style="flex:1"></span>
             <button class="btn ghost small" id="cMark" title="Use depois de enviar pelo Outlook ou Gmail">Marcar como enviados</button>
@@ -720,6 +721,10 @@ function cpfValido(v){
   return calc(9) === +d[9] && calc(10) === +d[10];
 }
 const nowIso = () => new Date().toISOString();
+// Nº do cartão: guarda só os 6 primeiros dígitos, mesmo que digitem os 17.
+const normCartao = v => { const d = onlyDigits(v); return d.length > 6 ? d.slice(0, 6) : d; };
+// EXT: sempre no padrão ext_login ("Fraivo" → "ext_Fraivo", "EXT-fraivo" → "ext_fraivo").
+const normExt = v => { let t = String(v ?? "").trim(); if (!t) return ""; t = t.replace(/^ext[\s_.\-]+/i, ""); t = t.replace(/\s+/g, ""); return t ? "ext_" + t : ""; };
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now().toString(36) + Math.random().toString(36).slice(2));
 const dt = iso => iso ? new Date(iso).toLocaleString("pt-BR", {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"}) : "–";
 const dtFull = iso => iso ? new Date(iso).toLocaleString("pt-BR", {day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit"}) : "–";
@@ -754,13 +759,14 @@ const LIB_FAIL = !DEMO && !window.supabase;
 
 class SupaStore {
   constructor(){ this.sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY); }
-  async list(t){ const { data, error } = await this.sb.from(t).select("*").order(t === T.config ? "key" : "created_at", { ascending: false }).limit(5000); if (error) throw error; return data; }
-  async insert(t, row){ const { data, error } = await this.sb.from(t).insert(row).select().single(); if (error) throw error; return data; }
-  async update(t, id, patch){ const { data, error } = await this.sb.from(t).update(patch).eq("id", id).select().single(); if (error) throw error; return data; }
+  async list(t){ const cols = t === T.cartoes ? "id,nome,cpf,ext,cartao,created_at,updated_at" : "*"; const { data, error } = await this.sb.from(t).select(cols).order(t === T.config ? "key" : "created_at", { ascending: false }).limit(5000); if (error) throw error; return data; }
+  async insert(t, row){ const cols = t === T.cartoes ? "id,nome,cpf,ext,cartao,created_at,updated_at" : "*"; const { data, error } = await this.sb.from(t).insert(row).select(cols).single(); if (error) throw error; return data; }
+  async update(t, id, patch){ const cols = t === T.cartoes ? "id,nome,cpf,ext,cartao,created_at,updated_at" : "*"; const { data, error } = await this.sb.from(t).update(patch).eq("id", id).select(cols).single(); if (error) throw error; return data; }
   async upsert(t, rows, onConflict){ const { error } = await this.sb.from(t).upsert(rows, { onConflict }); if (error) throw error; }
   async updateMany(t, ids, patch){ for (let i = 0; i < ids.length; i += 200) { const { error } = await this.sb.from(t).update(patch).in("id", ids.slice(i, i + 200)); if (error) throw error; } }
   async remove(t, id){ const { error } = await this.sb.from(t).delete().eq("id", id); if (error) throw error; }
   async findByCpf(t, cpf){ const { data, error } = await this.sb.from(t).select("*").eq("cpf", cpf).limit(20); if (error) throw error; return data; }
+  async photos(ids){ const { data, error } = await this.sb.from(T.cartoes).select("id,selfie_data").in("id", ids); if (error) throw error; return data; }
   subscribe(cb){
     try {
       this.sb.channel("lenel-live")
@@ -790,6 +796,7 @@ class LocalStore {
   async remove(t, id){ this.db[t] = this.db[t].filter(x => x.id !== id); this.save(); }
   async updateMany(t, ids, patch){ const set = new Set(ids); this.db[t].forEach(r => { if (set.has(r.id)) Object.assign(r, patch); }); this.save(); }
   async findByCpf(t, cpf){ this.db = this.load() || this.db; return (this.db[t] || []).filter(x => x.cpf === cpf); }
+  async photos(ids){ const set = new Set(ids); return (this.db[T.cartoes] || []).filter(x => set.has(x.id)).map(x => ({ id: x.id, selfie_data: x.selfie_data || "" })); }
   subscribe(cb){ addEventListener("storage", e => { if (e.key === this.key) cb("*", null); }); }
 }
 
@@ -927,7 +934,12 @@ async function gravarGroot(nome, cpf, ext){
     await store.upsert(T.config, [{ key, value: g }], "key");
   } catch (e) { console.warn("Groot ID não gravado", e); }
 }
+let loadBusy = false, loadAgain = false, loadFails = 0, loadTimer = null;
+// Agrupa várias atualizações em tempo real numa leitura só.
+function loadSoon(){ clearTimeout(loadTimer); loadTimer = setTimeout(() => loadAll(), 1200); }
 async function loadAll(first = false){
+  if (loadBusy) { loadAgain = true; return; }
+  loadBusy = true;
   try {
     const [c, p, g] = await Promise.all([store.list(T.cartoes), store.list(T.pedidos), store.list(T.config)]);
     if (S.loaded && !first) {
@@ -936,11 +948,16 @@ async function loadAll(first = false){
     }
     S.knownPed = new Set(p.map(x => x.id));
     S.cartoes = c; S.pedidos = p; S.cfg = Object.fromEntries(g.map(r => [r.key, r.value]));
-    S.loaded = true; S.loadError = null; setLive(DEMO ? "demo" : "on");
+    S.loaded = true; S.loadError = null; loadFails = 0; setLive(DEMO ? "demo" : "on");
     renderAll(first);
+    setTimeout(loadPhotos, 300);
+    setTimeout(fixLegacy, 1500);
   } catch (e) {
     console.error(e); setLive("off");
     const msg = String(e.message || e);
+    loadFails++;
+    // Já tem dados na tela e foi só lentidão: tenta de novo em silêncio; avisa só se falhar 3 vezes seguidas.
+    if (S.cartoes.length && loadFails < 3 && !/permission denied|does not exist|relation/i.test(msg)) { loadBusy = false; setTimeout(() => loadAll(), 5000); return; }
     const first = !S.loadError;
     S.loadError = /permission denied/i.test(msg)
       ? "O banco recusou o acesso (permission denied). Rode no Supabase o comando de permissão que está em Configurações → Avançado e recarregue a página."
@@ -950,7 +967,64 @@ async function loadAll(first = false){
     S.loaded = true;
     renderAll(first);
     if (first) toast(S.loadError, 8000);
+  } finally {
+    loadBusy = false;
+    if (loadAgain) { loadAgain = false; loadSoon(); }
   }
+}
+// Corrige cadastros antigos: cartão com mais de 6 dígitos e EXT sem "ext_".
+let legacyDone = false;
+async function fixLegacy(){
+  if (legacyDone || $("#admin").hidden) return; legacyDone = true;
+  const fix = r => { const o = {}; if (r.cartao && normCartao(r.cartao) !== r.cartao) o.cartao = normCartao(r.cartao); if (r.ext && normExt(r.ext) !== r.ext) o.ext = normExt(r.ext); return Object.keys(o).length ? o : null; };
+  const light = c => ({ id: c.id, nome: c.nome, cpf: c.cpf, ext: c.ext, cartao: c.cartao });
+  const cards = S.cartoes.map(c => { const o = fix(c); return o && { ...light(c), ...o }; }).filter(Boolean);
+  const peds = S.pedidos.map(p => { const o = fix(p); return o && { ...p, ...o }; }).filter(Boolean);
+  if (!cards.length && !peds.length) return;
+  try {
+    if (cards.length) await store.upsert(T.cartoes, cards, "id");
+    if (peds.length) await store.upsert(T.pedidos, peds, "id");
+    toast(`${cards.length + peds.length} registro(s) ajustados: cartão com 6 dígitos e EXT no padrão ext_`, 4500); loadSoon();
+  } catch (e) { console.warn("Ajuste de cadastros antigos não concluído", e.message); }
+}
+// Fotos: baixadas aos poucos (8 por vez) e só uma vez; baixa de novo só quem teve o cadastro alterado.
+// Estado de cada uma: carregando (sem entrada), com foto, sem foto (d = ""), ou erro (err = true, tenta de novo).
+S.photos = new Map(); let photosBusy = false, photoRetry = null;
+const photoOf = c => c ? (c.selfie_data || S.photos.get(c.id)?.d || "") : "";
+const verOf = c => c.updated_at || c.created_at;
+function photoCell(c){
+  if (c.selfie_data) return photoHtml(c.selfie_data);
+  const e = S.photos.get(c.id);
+  if (!e || e.v !== verOf(c)) return e?.err ? '<span class="pill p-crit" title="Não carregou; tentando de novo">Erro</span>' : '<div class="sk" style="width:44px;height:52px;border-radius:10px" title="Carregando foto"></div>';
+  return photoHtml(e.d);
+}
+async function loadPhotos(){
+  if (photosBusy || !store.photos) return; photosBusy = true;
+  let falhou = 0;
+  try {
+    const falta = S.cartoes.filter(c => { const e = S.photos.get(c.id); return !e || e.err || e.v !== verOf(c); }).map(c => c.id);
+    for (let i = 0; i < falta.length; i += 8) {
+      const lote = falta.slice(i, i + 8);
+      try {
+        const rows = await store.photos(lote);
+        const got = new Map(rows.map(r => [r.id, r.selfie_data || ""]));
+        lote.forEach(id => { const c = S.cartoes.find(x => x.id === id); if (c) S.photos.set(id, { d: got.get(id) || "", v: verOf(c) }); });
+      } catch (e) {
+        console.warn("Lote de fotos não carregou", e.message); falhou += lote.length;
+        lote.forEach(id => S.photos.set(id, { d: "", v: null, err: true }));
+      }
+      if (S.tab === "banco") renderBanco();
+    }
+  } finally {
+    photosBusy = false;
+    if (S.tab === "banco") renderBanco();
+    clearTimeout(photoRetry); if (falhou) photoRetry = setTimeout(loadPhotos, 15000);
+  }
+}
+function photoCounts(){
+  let com = 0, sem = 0, carregando = 0;
+  for (const c of S.cartoes) { const e = S.photos.get(c.id); if (c.selfie_data || (e && !e.err && e.v === verOf(c) && e.d)) com++; else if (e && !e.err && e.v === verOf(c)) sem++; else carregando++; }
+  return { com, sem, carregando };
 }
 function setLive(s){
   const tag = $("#liveTag"); tag.classList.toggle("demo", s === "demo"); tag.classList.toggle("off", s === "off");
@@ -967,7 +1041,7 @@ function renderAll(first){
 function cardByCpf(cpf){ return S.cartoes.find(c => c.cpf === cpf); }
 // EXT oficial = o do cadastro no Banco; o digitado no pedido só vale se a pessoa não estiver no Banco.
 function nomeOf(p){ return String((p && p.cpf && cardByCpf(p.cpf)?.nome) || (p && p.nome) || ""); }
-function extOf(p){ return String((p && p.cpf && cardByCpf(p.cpf)?.ext) || (p && p.ext) || ""); }
+function extOf(p){ return normExt((p && p.cpf && cardByCpf(p.cpf)?.ext) || (p && p.ext) || ""); }
 
 function delBtn(id){
   return S.confirmPed === id
@@ -1041,14 +1115,14 @@ function renderBanco(){
   const body = $("#bancoBody");
   if (!S.loaded) { body.innerHTML = skeletonRows(6, 8); return; }
   const q = S.q.trim().toLowerCase(), qd = onlyDigits(q);
-  const rows = [...S.cartoes].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).filter(c => !S.bf || (S.bf === "pend" ? /Pendente|setor/.test(bancoStatus(c)) : S.bf === "com" ? !!c.cartao : !c.cartao)).filter(c => !q ||
+  const rows = [...S.cartoes].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).filter(c => !S.bf || (S.bf === "semfoto" ? (() => { const e = S.photos.get(c.id); return !c.selfie_data && e && !e.err && e.v === verOf(c) && !e.d; })() : S.bf === "pend" ? /Pendente|setor/.test(bancoStatus(c)) : S.bf === "com" ? !!c.cartao : !c.cartao)).filter(c => !q ||
     grootId(c).includes(q) || c.nome.toLowerCase().includes(q) || (c.ext || "").toLowerCase().includes(q) ||
     (qd && (c.cpf.includes(qd) || (c.cartao || "").includes(qd))));
-  $("#bancoCount").textContent = q ? `${rows.length} de ${S.cartoes.length}` : `${S.cartoes.length} pessoas`;
+  { const f = photoCounts(); $("#bancoCount").textContent = (q || S.bf ? `${rows.length} de ${S.cartoes.length}` : `${S.cartoes.length} pessoas`) + ` · ${f.com} com foto · ${f.sem} sem foto` + (f.carregando ? ` · carregando ${f.carregando}…` : ""); }
   if (!S.cartoes.length) { body.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>Banco vazio</strong>Adicione com “Novo cadastro”, cole uma lista do Excel, ou conclua um pedido na aba Envio.</div></td></tr>`; return; }
   if (!rows.length) { body.innerHTML = `<tr><td colspan="8"><div class="empty">Nada encontrado para “${esc(S.q)}”.</div></td></tr>`; return; }
   body.innerHTML = rows.map(c => `<tr>
-    <td><button class="btn ghost small" data-act="edit" data-id="${esc(c.id)}" aria-label="Abrir cadastro de ${esc(c.nome)}">${photoHtml(c.selfie_data)}</button></td>
+    <td><button class="btn ghost small" data-act="edit" data-id="${esc(c.id)}" aria-label="Abrir cadastro de ${esc(c.nome)}">${photoCell(c)}</button></td>
     <td class="name">${esc(c.nome)}</td><td class="mono">${esc(grootId(c)) || "Não localizado"}</td>
     <td class="mono">${fmtCpf(c.cpf)}</td>
     <td class="mono">${esc(c.ext) || '<span class="muted">–</span>'}</td>
@@ -1193,7 +1267,7 @@ $("#cSubject").addEventListener("input", () => MAIL.subjTouched = true);
 
 function introHtml(t){ return esc(t).split(/\n{2,}/).map(par => `<p style="margin:0 0 10px">${par.replace(/\n/g, "<br>")}</p>`).join(""); }
 function peopleTable(ps){
-  return `<table cellpadding="5" cellspacing="0" border="1" style="border-collapse:collapse;border-color:#D7DDE4;font-size:13px;margin:4px 0 12px;background:#fff;color:#111C26"><tr style="background:#EEF1F4;color:#465463;text-align:left"><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th></tr>${ps.map(p => `<tr><td>${esc(nomeOf(p))}</td><td>${esc(grootId(p)) || "Não localizado"}</td><td>${fmtCpf(p.cpf)}</td><td>${esc(extOf(p) || "-")}</td></tr>`).join("")}</table>`;
+  return `<table cellpadding="5" cellspacing="0" border="1" style="border-collapse:collapse;border-color:#D7DDE4;font-size:13px;margin:4px 0 12px;background:#fff;color:#111C26"><tr style="background:#EEF1F4;color:#465463;text-align:left"><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th></tr>${ps.map(p => `<tr><td class="nm">${esc(nomeOf(p))}</td><td>${esc(grootId(p)) || "Não localizado"}</td><td>${fmtCpf(p.cpf)}</td><td>${esc(extOf(p) || "-")}</td></tr>`).join("")}</table>`;
 }
 const closing = () => $("#cClose").value.trim();
 const LOGO_URL = "https://cartao-lenel-kn.netlify.app/kn-logo.jpg";
@@ -1220,7 +1294,7 @@ function renderCompose(){
   if (!$("#cPreview").contains(document.activeElement)) $("#cPreview").innerHTML = n ? editTable(ps) : `<div class="none">Marque as pessoas na lista abaixo para incluir no e-mail.</div>`;
   const tot = aprovados().length, fora = tot - n;
   $("#cCount").textContent = `${n} de ${tot} no e-mail` + (fora ? ` · ${fora} desmarcado(s)` : "");
-  ["#cSend", "#cOutlook", "#cGmail", "#cCopy", "#cMark"].forEach(id => $(id).disabled = !n);
+  ["#cSend", "#cOutlook", "#cGmail", "#cCopy", "#cPrint", "#cMark"].forEach(id => $(id).disabled = !n);
   $("#cTest").disabled = false;
 }
 // Prévia editável: o que for corrigido aqui é salvo no cadastro da pessoa e sai no e-mail.
@@ -1238,7 +1312,7 @@ $("#cPreview").addEventListener("focusout", async e => {
   if (v === atual) return;
   try {
     if (f === "nome") { if (normName(v).split(" ").length < 2) return toast("Informe nome e sobrenome"); await salvarPessoa(cpf, { nome: normName(v) }); }
-    else if (f === "ext") await salvarPessoa(cpf, { ext: v });
+    else if (f === "ext") await salvarPessoa(cpf, { ext: normExt(v) });
     else await saveGrootId(cpf, v);
     toast("Corrigido no cadastro"); await loadAll();
   } catch (err) { toast("Não salvou: " + err.message, 5000); }
@@ -1331,6 +1405,44 @@ $("#cTest").onclick = async () => {
   toast(ok ? `Teste para ${asst.email}: no Gmail, clique na mensagem e aperte Ctrl+V. Nada foi marcado como enviado.` : "Abra o Gmail e cole o texto do e-mail.", 9000);
 };
 $("#cGmail").onclick = () => openExternal("gmail");
+/* ---------- imprimir lista do e-mail ---------- */
+function printList(){
+  const ps = selPeople();
+  if (!ps.length) return toast("Marque pelo menos uma pessoa para imprimir");
+  const asst = currentAsst();
+  const agora = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const assunto = $("#cSubject").value.trim() || defaultSubject(ps.length);
+  const linhas = ps.map((p, i) => `<tr><td class="n">${i + 1}</td><td>${esc(nomeOf(p))}</td><td class="m">${esc(grootId(p)) || "Não localizado"}</td><td class="m">${fmtCpf(p.cpf)}</td><td class="m">${esc(extOf(p) || "-")}</td><td class="fit">${esc(String(p.motivo || "-").split("\nObs: ")[0])}</td><td class="ck"></td></tr>`).join("");
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(assunto)}</title><style>
+    @page{size:A4;margin:14mm 12mm}
+    *{box-sizing:border-box}body{font-family:"Segoe UI",Arial,sans-serif;color:#111;margin:0;font-size:11.5px}
+    header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;border-bottom:2px solid #11316e;padding-bottom:8px;margin-bottom:10px}
+    h1{margin:0;font-size:17px;color:#11316e}.meta{font-size:11px;color:#444;line-height:1.5;text-align:right}
+    img{height:34px}table{width:100%;border-collapse:collapse;table-layout:fixed}
+    .nm,.fit{white-space:nowrap;overflow:hidden}.nm{font-weight:600}
+    th{background:#EEF1F4;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#333}
+    th,td{border:1px solid #bbb;padding:5px 7px;vertical-align:middle}tr{page-break-inside:avoid}
+    thead{display:table-header-group}.n{width:28px;text-align:center;color:#555}.m{font-family:Consolas,monospace;white-space:nowrap}
+    .ck{}.tot{margin-top:8px;font-size:11px;color:#333}
+    .ass{margin-top:36px;display:flex;gap:40px}.ass div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center;font-size:11px}
+  </style></head><body>
+    <header><div><img src="${esc(cfg("logo"))}" alt=""><h1>${esc(assunto)}</h1></div>
+    <div class="meta">Impresso em ${agora}${asst ? `<br>Responsável: ${esc(asst.nome)} (${esc(asst.cargo || "Assistente")})` : ""}${MAIL.to.length ? `<br>Para: ${esc(MAIL.to.join(", "))}` : ""}</div></header>
+    <table><colgroup><col style="width:4%"><col style="width:42%"><col style="width:11%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:7%"></colgroup><thead><tr><th class="n">#</th><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th><th>Motivo</th><th>Conf.</th></tr></thead><tbody>${linhas}</tbody></table>
+    <div class="tot">Total: <b>${ps.length}</b> ${ps.length === 1 ? "pessoa" : "pessoas"}</div>
+    <div class="ass"><div>Responsável pelo pedido</div><div>Security / Cadastro</div></div>
+  </body></html>`;
+  const fr = document.createElement("iframe");
+  fr.style.cssText = "position:fixed;left:-9999px;top:0;width:703px;height:1000px;border:0";
+  document.body.appendChild(fr);
+  const d = fr.contentDocument; d.open(); d.write(html); d.close();
+  // nome numa linha só: diminui a fonte só de quem não cabe
+  const fit = () => d.querySelectorAll(".nm,.fit").forEach(td => { let fs = 11.5; td.style.fontSize = fs + "px"; while (td.scrollWidth > td.clientWidth && fs > 6.5) { fs -= 0.25; td.style.fontSize = fs + "px"; } });
+  const go = () => { fit(); try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch { toast("Não foi possível abrir a impressão"); } setTimeout(() => fr.remove(), 1500); };
+  const img = d.querySelector("img");
+  if (img && !img.complete) { img.onload = img.onerror = go; setTimeout(() => { if (fr.isConnected) go(); }, 2500); } else setTimeout(go, 150);
+}
+$("#cPrint").onclick = printList;
 $("#cCopy").onclick = async () => {
   const c = checkCompose(); if (!c) return;
   const ok = await copyRich(composeHtml(c.ps, c.intro, c.close), composeText(c.ps, c.intro, c.close));
@@ -1518,7 +1630,7 @@ async function dispatchBatch(ps, manual = false){
 
 async function finish(id, cartao){
   const p = S.pedidos.find(x => x.id === id); if (!p) return;
-  cartao = cartao.trim();
+  cartao = normCartao(cartao);
   if (!cartao) { toast("Informe o número do cartão"); $("#card-" + id)?.focus(); return; }
   const outro = S.cartoes.find(c => c.cartao === cartao && c.cpf !== p.cpf);
   if (outro) { toast(`Cartão ${cartao} já pertence a ${outro.nome}`, 4500); return; }
@@ -1603,7 +1715,7 @@ $("#pasteCardsBtn").onclick = () => {
       const p = aprov.get(cpf);
       if (!p) { miss.push(fmtCpf(cpf)); continue; }
       if (!nums) { semCartao.push(p.nome); continue; }
-      found.push({ p, cartao: nums[nums.length - 1] });
+      found.push({ p, cartao: normCartao(nums[nums.length - 1]) });
     }
     $("#cardsPrev").innerHTML = lines.length ? `<b>${found.length}</b> encontrados nos aprovados` +
       (miss.length ? ` · <span style="color:var(--crit)">${miss.length} não estão nos aprovados: ${esc(miss.slice(0, 4).join(", "))}${miss.length > 4 ? "…" : ""}</span>` : "") +
@@ -1688,7 +1800,7 @@ function openPerson(c){
   const isNew = !c; c ||= { nome: "", cpf: "", ext: "", cartao: "" };
   openSheet(`<div class="sheet-h"><h3>${isNew ? "Novo cadastro" : "Editar cadastro"}</h3><button class="iconbtn" data-close aria-label="Fechar">✕</button></div>
     <form id="personForm" style="display:flex;flex-direction:column;gap:10px">
-      <div style="display:flex;gap:14px;align-items:center"><div id="editPhotoPreview">${photoHtml(c.selfie_data, true)}</div><div><b>${esc(c.nome || "Novo cadastro")}</b><div class="hint">Foto do cadastro.</div></div></div>
+      <div style="display:flex;gap:14px;align-items:center"><div id="editPhotoPreview">${photoHtml(photoOf(c), true)}</div><div><b>${esc(c.nome || "Novo cadastro")}</b><div class="hint">Foto do cadastro.</div></div></div>
       <div class="field"><label for="editPhotoFile">Adicionar / trocar foto</label><input id="editPhotoFile" type="file" accept="image/*" capture="user"><span class="hint">Escolha a foto e clique em Salvar alterações.</span></div>
       <div class="field"><label for="eNome">Nome completo</label><input id="eNome" value="${esc(c.nome)}" required></div>
       <div class="grid2">
@@ -1701,10 +1813,11 @@ function openPerson(c){
       <div class="toolbar"><button class="btn primary" type="submit">${isNew ? "Adicionar ao banco" : "Salvar alterações"}</button><button class="btn ghost" type="button" data-close>Cancelar</button></div>
     </form>`);
   let editPhotoData = "", editPhotoTask = null, editPhotoError = "", editPhotoVersion = 0;
+  if (!isNew && !photoOf(c) && store.photos) store.photos([c.id]).then(r => { const d = r[0]?.selfie_data || ""; S.photos.set(c.id, { d, v: verOf(c) }); if (!editPhotoData && $("#editPhotoPreview")) $("#editPhotoPreview").innerHTML = photoHtml(d, true); }).catch(() => {});
   $("#editPhotoFile").onchange = () => {
     const version = ++editPhotoVersion, file = $("#editPhotoFile").files?.[0];
     editPhotoData = ""; editPhotoError = ""; $("#eErr").textContent = "";
-    $("#editPhotoPreview").innerHTML = photoHtml(c.selfie_data, true);
+    $("#editPhotoPreview").innerHTML = photoHtml(photoOf(c), true);
     if (!file) { editPhotoTask = null; return; }
     editPhotoTask = (async () => {
       try {
@@ -1719,7 +1832,7 @@ function openPerson(c){
   $("#eCpf").oninput = e => e.target.value = maskCpf(e.target.value);
   $("#personForm").onsubmit = async ev => {
     ev.preventDefault();
-    const nome = normName($("#eNome").value), cpf = onlyDigits($("#eCpf").value), ext = $("#eExt").value.trim(), cartao = $("#eCartao").value.trim();
+    const nome = normName($("#eNome").value), cpf = onlyDigits($("#eCpf").value), ext = normExt($("#eExt").value), cartao = normCartao($("#eCartao").value);
     const err = $("#eErr");
     if (nome.split(" ").length < 2) return err.textContent = "Informe nome e sobrenome.";
     if (!cpfValido(cpf)) return err.textContent = "CPF inválido. Confira os 11 dígitos.";
@@ -1824,7 +1937,7 @@ $("#pasteBtn").onclick = () => {
       if (/^nome/i.test(c[0])) continue;
       const cpf = onlyDigits(c[1]).padStart(11, "0");
       if (!c[0] || !cpfValido(cpf)) { bad.push(c[0] || l); continue; }
-      ok.push({ nome: normName(c[0]), cpf, ext: c[2] || "", cartao: onlyDigits(c[3]) ? c[3] : "", updated_at: nowIso() });
+      ok.push({ nome: normName(c[0]), cpf, ext: normExt(c[2]), cartao: normCartao(c[3]), updated_at: nowIso() });
     }
     parsed = ok;
     const novos = ok.filter(r => !cardByCpf(r.cpf)).length;
@@ -1941,6 +2054,7 @@ function initPublic(){
   nome.oninput = () => { art("artName", nome.value.trim() || "Seu nome aqui"); setErr("fNome"); };
   cpf.oninput = () => { cpf.value = maskCpf(cpf.value); art("artCpf", cpf.value || "•••.•••.•••-••"); setErr("fCpf"); };
   ext.oninput = () => setErr("fExt");
+  ext.onblur = () => { if (ext.value.trim()) ext.value = normExt(ext.value); };
   const setMotivo = val => {
     motivo.value=val; setErr("fMotivo");
     $$(".motivo-opt").forEach(b=>{const on=b.dataset.motivo===val;b.classList.toggle("primary",on);b.setAttribute("aria-pressed",on?"true":"false")});
@@ -1977,7 +2091,7 @@ function initPublic(){
   galeriaIn.onchange = () => onPhoto(galeriaIn);
   $("#pubForm").onsubmit = async e => {
     e.preventDefault();
-    const n = normName(nome.value), c = onlyDigits(cpf.value), x = ext.value.trim(), mo = motivo.value, cardPub=cartaoPub.value.trim();
+    const n = normName(nome.value), c = onlyDigits(cpf.value), x = normExt(ext.value), mo = motivo.value, cardPub=cartaoPub.value.trim();
     let ok = true;
     if (n.split(" ").length < 2) { setErr("fNome", "Informe nome e sobrenome."); ok = false; }
     if (!cpfValido(c)) { setErr("fCpf", "CPF inválido. Confira os números."); ok = false; }
@@ -1994,7 +2108,7 @@ function initPublic(){
     const t = nowIso();
     try {
       if (mo === "Tenho cartão") {
-        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, cartao:cardPub, updated_at:t }], "cpf");
+        await store.upsert(T.cartoes, [{ nome:n, cpf:c, ext:x, cartao:normCartao(cardPub), updated_at:t }], "cpf");
         await gravarGroot(n, c, x);
         await saveCadastroPhoto(c, selfieData);
         $("#doneTitle").textContent = "Cadastro enviado";
@@ -2096,7 +2210,7 @@ function initAdmin(){
   setTab((location.hash === "#painel" ? "#banco" : location.hash || "#banco").slice(1));
   renderAll();
   loadAll(true);
-  store.subscribe(() => loadAll());
+  store.subscribe(() => loadSoon());
   setInterval(() => { if (!document.hidden) loadAll(); }, DEMO ? 5000 : 20000);
   setInterval(renderKpis, 60000);
 }
