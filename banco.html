@@ -379,8 +379,8 @@ body.embed::before{display:none}
 <div class="viewer" id="viewer" hidden><figure><img id="viewerImg" alt=""><figcaption id="viewerCap"></figcaption><button class="btn small" id="viewerClose" style="margin-top:10px">Fechar</button></figure></div>
 <script>
 /* Página de consulta do banco do Controle Lenel — só permite editar o número do cartão (não exclui nem cria). */
-const SUPABASE_URL = "https://cjentqthseecgizptyqe.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqZW50cXRoc2VlY2dpenB0eXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxMDY0MTIsImV4cCI6MjEwNTY4MjQxMn0.UWIWzQIEZOWQ2RPOyPmsD3Jo2A6G90W9Rwl1rtEQZv0";
+const SUPABASE_URL = "https://bkbrmsjwffcfkablpvkr.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_StBcrqGPPNflqnm2e4VeYg_3k5q1ZFz";
 const MOSTRAR_CPF_COMPLETO = true;  // true = mostra o CPF inteiro na tabela
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -468,20 +468,67 @@ function render(){
 function setLive(state, txt){ const t=$("#liveTag"); t.className="live"+(state==="ok"?"":" off"); $("#liveTxt").textContent=txt; }
 
 let sb = null, busy = false;
+// Fotos: guardadas no navegador (mesmo cache do Controle Lenel). Cada foto é baixada uma vez por computador
+// e só de novo quando o cadastro muda. Economiza o tráfego do Supabase.
+const FOTOS = new Map();
+const verOf = c => c.updated_at || c.created_at || "";
+const PhotoCache = (() => {
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise(res => {
+    try { const r = indexedDB.open("lenel_fotos", 1); r.onupgradeneeded = () => r.result.createObjectStore("f", { keyPath: "id" }); r.onsuccess = () => res(r.result); r.onerror = () => res(null); r.onblocked = () => res(null); }
+    catch { res(null); }
+  }));
+  return {
+    async getMany(ids){
+      const db = await open(), out = new Map(); if (!db || !ids.length) return out;
+      return new Promise(res => {
+        try {
+          const st = db.transaction("f", "readonly").objectStore("f"); let n = ids.length;
+          ids.forEach(id => { const q = st.get(id); q.onsuccess = () => { if (q.result) out.set(id, q.result); if (--n === 0) res(out); }; q.onerror = () => { if (--n === 0) res(out); }; });
+        } catch { res(out); }
+      });
+    },
+    async putMany(rows){ const db = await open(); if (!db || !rows.length) return; try { const st = db.transaction("f", "readwrite").objectStore("f"); rows.forEach(r => st.put(r)); } catch {} }
+  };
+})();
+const withPhotos = () => S.cartoes.forEach(c => { const f = FOTOS.get(c.id); c.selfie_data = f && f.v === verOf(c) ? f.d : ""; });
+let photosBusy = false;
+async function loadPhotos(){
+  if (photosBusy || !sb) return; photosBusy = true;
+  try {
+    let falta = S.cartoes.filter(c => { const f = FOTOS.get(c.id); return !f || f.v !== verOf(c); });
+    if (falta.length) {
+      const cached = await PhotoCache.getMany(falta.map(c => c.id)).catch(() => new Map());
+      falta = falta.filter(c => { const e = cached.get(c.id); if (e && e.v === verOf(c)) { FOTOS.set(c.id, { d: e.d || "", v: e.v }); return false; } return true; });
+      withPhotos(); if (!editing()) render();
+    }
+    for (let i = 0; i < falta.length; i += 25) {
+      const lote = falta.slice(i, i + 25);
+      const { data, error } = await sb.from("lenel_cartoes").select("id,selfie_data").in("id", lote.map(c => c.id));
+      if (error) throw error;
+      const got = new Map((data || []).map(r => [r.id, r.selfie_data || ""])), salvar = [];
+      lote.forEach(c => { const e = { d: got.get(c.id) || "", v: verOf(c) }; FOTOS.set(c.id, e); salvar.push({ id: c.id, ...e }); });
+      PhotoCache.putMany(salvar);
+      withPhotos(); if (!editing()) render();
+    }
+  } catch (e) { console.error("fotos", e); }
+  finally { photosBusy = false; }
+}
 async function load(){
   if (busy || !sb) return; busy = true;
   try {
     const [c, p, g1, g2] = await Promise.all([
-      sb.from("lenel_cartoes").select("id,nome,cpf,ext,cartao,selfie_data,created_at,updated_at").limit(5000),
+      sb.from("lenel_cartoes").select("id,nome,cpf,ext,cartao,created_at,updated_at").limit(5000),
       sb.from("lenel_pedidos").select("cpf,status,motivo").limit(5000),
       sb.from("lenel_config").select("key,value").eq("key", "groot_lista"),
       sb.from("lenel_config").select("key,value").like("key", "groot_id:%").limit(5000)
     ]);
     if (c.error) throw c.error;
-    S.cartoes = c.data || []; S.pedidos = p.error ? [] : (p.data || []);
+    S.cartoes = c.data || []; withPhotos(); S.pedidos = p.error ? [] : (p.data || []);
     S.cfg = Object.fromEntries([...(g1.error ? [] : g1.data || []), ...(g2.error ? [] : g2.data || [])].map(r => [r.key, r.value]));
     S.loaded = true;
     $("#errBanner").hidden = true; setLive("ok", "AO VIVO"); if (!editing()) render();
+    setTimeout(loadPhotos, 0);
   } catch (e) {
     $("#errText").textContent = (e && (e.message || e.code)) || "Erro desconhecido"; $("#errBanner").hidden = false; setLive("off", "SEM CONEXÃO");
     if (!S.loaded) { S.loaded = true; render(); }
@@ -507,6 +554,7 @@ async function saveCard(inp){
     if (error) throw error;
     if (!data || !data.length) throw new Error("sem permissão para editar");
     c.cartao = data[0].cartao; c.updated_at = data[0].updated_at;
+    { const f = FOTOS.get(c.id); if (f) { f.v = verOf(c); PhotoCache.putMany([{ id: c.id, ...f }]); } }
     inp.classList.remove("dirty","bad"); inp.disabled = false; show("✓ Salvo", "ok"); toast("Cartão de " + c.nome + " salvo");
     setTimeout(() => { if (!editing()) render(); }, 1500);
   } catch (e) { inp.disabled = false; inp.classList.add("bad"); show("Não salvou: " + ((e && (e.message || e.code)) || "erro"), "err"); }
