@@ -990,6 +990,27 @@ async function fixLegacy(){
 // Fotos: baixadas aos poucos (8 por vez) e só uma vez; baixa de novo só quem teve o cadastro alterado.
 // Estado de cada uma: carregando (sem entrada), com foto, sem foto (d = ""), ou erro (err = true, tenta de novo).
 S.photos = new Map(); let photosBusy = false, photoRetry = null;
+// Cache das fotos no navegador (IndexedDB): cada foto é baixada do banco uma vez por computador
+// e só de novo quando o cadastro muda. Economiza o tráfego do Supabase. Se o navegador não deixar, segue sem cache.
+const PhotoCache = (() => {
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise(res => {
+    try { const r = indexedDB.open("lenel_fotos", 1); r.onupgradeneeded = () => r.result.createObjectStore("f", { keyPath: "id" }); r.onsuccess = () => res(r.result); r.onerror = () => res(null); r.onblocked = () => res(null); }
+    catch { res(null); }
+  }));
+  return {
+    async getMany(ids){
+      const db = await open(), out = new Map(); if (!db || !ids.length) return out;
+      return new Promise(res => {
+        try {
+          const st = db.transaction("f", "readonly").objectStore("f"); let n = ids.length;
+          ids.forEach(id => { const q = st.get(id); q.onsuccess = () => { if (q.result) out.set(id, q.result); if (--n === 0) res(out); }; q.onerror = () => { if (--n === 0) res(out); }; });
+        } catch { res(out); }
+      });
+    },
+    async putMany(rows){ const db = await open(); if (!db || !rows.length) return; try { const st = db.transaction("f", "readwrite").objectStore("f"); rows.forEach(r => st.put(r)); } catch {} }
+  };
+})();
 const photoOf = c => c ? (c.selfie_data || S.photos.get(c.id)?.d || "") : "";
 const verOf = c => c.updated_at || c.created_at;
 function photoCell(c){
@@ -1002,13 +1023,21 @@ async function loadPhotos(){
   if (photosBusy || !store.photos) return; photosBusy = true;
   let falhou = 0;
   try {
-    const falta = S.cartoes.filter(c => { const e = S.photos.get(c.id); return !e || e.err || e.v !== verOf(c); }).map(c => c.id);
+    let falta = S.cartoes.filter(c => { const e = S.photos.get(c.id); return !e || e.err || e.v !== verOf(c); }).map(c => c.id);
+    if (falta.length) {
+      const byId = new Map(S.cartoes.map(c => [c.id, c]));
+      const cached = await PhotoCache.getMany(falta).catch(() => new Map());
+      falta = falta.filter(id => { const c = byId.get(id), e = cached.get(id); if (c && e && e.v === verOf(c)) { S.photos.set(id, { d: e.d || "", v: e.v }); return false; } return true; });
+      if (S.tab === "banco") renderBanco();
+    }
     for (let i = 0; i < falta.length; i += 8) {
       const lote = falta.slice(i, i + 8);
       try {
         const rows = await store.photos(lote);
         const got = new Map(rows.map(r => [r.id, r.selfie_data || ""]));
-        lote.forEach(id => { const c = S.cartoes.find(x => x.id === id); if (c) S.photos.set(id, { d: got.get(id) || "", v: verOf(c) }); });
+        const salvar = [];
+        lote.forEach(id => { const c = S.cartoes.find(x => x.id === id); if (c) { const e = { d: got.get(id) || "", v: verOf(c) }; S.photos.set(id, e); salvar.push({ id, ...e }); } });
+        PhotoCache.putMany(salvar);
       } catch (e) {
         console.warn("Lote de fotos não carregou", e.message); falhou += lote.length;
         lote.forEach(id => S.photos.set(id, { d: "", v: null, err: true }));
@@ -1813,7 +1842,7 @@ function openPerson(c){
       <div class="toolbar"><button class="btn primary" type="submit">${isNew ? "Adicionar ao banco" : "Salvar alterações"}</button><button class="btn ghost" type="button" data-close>Cancelar</button></div>
     </form>`);
   let editPhotoData = "", editPhotoTask = null, editPhotoError = "", editPhotoVersion = 0;
-  if (!isNew && !photoOf(c) && store.photos) store.photos([c.id]).then(r => { const d = r[0]?.selfie_data || ""; S.photos.set(c.id, { d, v: verOf(c) }); if (!editPhotoData && $("#editPhotoPreview")) $("#editPhotoPreview").innerHTML = photoHtml(d, true); }).catch(() => {});
+  if (!isNew && !photoOf(c) && store.photos) store.photos([c.id]).then(r => { const d = r[0]?.selfie_data || ""; S.photos.set(c.id, { d, v: verOf(c) }); PhotoCache.putMany([{ id: c.id, d, v: verOf(c) }]); if (!editPhotoData && $("#editPhotoPreview")) $("#editPhotoPreview").innerHTML = photoHtml(d, true); }).catch(() => {});
   $("#editPhotoFile").onchange = () => {
     const version = ++editPhotoVersion, file = $("#editPhotoFile").files?.[0];
     editPhotoData = ""; editPhotoError = ""; $("#eErr").textContent = "";
