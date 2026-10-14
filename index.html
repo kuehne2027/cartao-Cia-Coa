@@ -693,8 +693,8 @@ body.embed::before{display:none}
    CONFIGURAÇÃO — preencha antes de publicar no GitHub Pages
    ================================================================ */
 const CONFIG = {
-  SUPABASE_URL: "https://cjentqthseecgizptyqe.supabase.co",
-  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqZW50cXRoc2VlY2dpenB0eXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxMDY0MTIsImV4cCI6MjEwNTY4MjQxMn0.UWIWzQIEZOWQ2RPOyPmsD3Jo2A6G90W9Rwl1rtEQZv0",      // cole aqui a anon key (Project Settings → API). Vazio = modo demonstração
+  SUPABASE_URL: "https://bkbrmsjwffcfkablpvkr.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_StBcrqGPPNflqnm2e4VeYg_3k5q1ZFz",      // cole aqui a anon key (Project Settings → API). Vazio = modo demonstração
   ADMIN_PIN: "",
   FORM_URL: "https://tinyurl.com/Cadastro-Lenel",   // link que o pessoal recebe (só formulário)
   FORM_ONLY_HOST: ""      // neste endereço o app mostra apenas o formulário               // opcional: PIN para abrir o painel (o formulário público não pede PIN)
@@ -2013,9 +2013,9 @@ alter table lenel_config  enable row level security;
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on lenel_cartoes, lenel_pedidos, lenel_config to anon, authenticated;
 
-create policy "lenel_cartoes_anon" on lenel_cartoes for all to anon using (true) with check (true);
-create policy "lenel_pedidos_anon" on lenel_pedidos for all to anon using (true) with check (true);
-create policy "lenel_config_anon"  on lenel_config  for all to anon using (true) with check (true);
+-- Permissões de acesso devem ser configuradas de forma segura no servidor.
+
+
 
 -- tempo real (pedidos aparecem sem recarregar)
 alter publication supabase_realtime add table lenel_pedidos, lenel_cartoes, lenel_config;`;
