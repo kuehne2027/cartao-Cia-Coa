@@ -2211,7 +2211,9 @@ function initAdmin(){
   renderAll();
   loadAll(true);
   store.subscribe(() => loadSoon());
-  setInterval(() => { if (!document.hidden) loadAll(); }, DEMO ? 5000 : 20000);
+  // Realtime continua avisando mudanças; verificação de segurança a cada 5 minutos.
+  setInterval(() => { if (!document.hidden) loadAll(); }, DEMO ? 5000 : 300000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) loadSoon(); });
   setInterval(renderKpis, 60000);
 }
 (function boot(){
