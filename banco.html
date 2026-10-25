@@ -360,7 +360,7 @@ body.embed::before{display:none}
     <div class="ph">
       <div>
         <h2>Banco de dados <span class="c" id="bancoCount"></span></h2>
-        <p>Cadastros do Cartão Lenel. Digite o número do cartão na coluna “Nº do cartão” e aperte Enter para salvar.</p>
+        <p>Cadastros do Cartão Lenel · horários do Headcount (25/10/2026). Digite o número do cartão na coluna “Nº do cartão” e aperte Enter para salvar.</p>
       </div>
       <div class="toolbar">
         <div class="chips" id="bancoChips"><button class="chip on" data-bf="">Todos</button><button class="chip" data-bf="com">Com cartão</button><button class="chip" data-bf="pend">Pendentes</button><button class="chip" data-bf="sem">Sem cartão</button></div>
@@ -369,7 +369,7 @@ body.embed::before{display:none}
     </div>
     <div class="tablebox">
       <table>
-        <thead><tr><th>Foto</th><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th><th>Nº do cartão</th><th>Atualizado</th></tr></thead>
+        <thead><tr><th>Foto</th><th>Nome completo</th><th>Groot ID</th><th>CPF</th><th>EXT</th><th>Nº do cartão</th><th>Horário</th></tr></thead>
         <tbody id="bancoBody"></tbody>
       </table>
     </div>
@@ -394,6 +394,7 @@ const normName = s => String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase().
 let toastT; function toast(msg){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
 const okPhoto = p => /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(p || "") && p.length <= 200000;
 
+const HORARIOS_HEADCOUNT = {"149367":"05:00","502018":"05:00","2411551":"13:00","2613464":"05:00","2613840":"05:00","2613465":"05:00","2466695":"05:00","2457900":"05:00","2180394":"05:00","2503074":"05:00","2550358":"08:00","2415948":"14:00","265236":"05:00","2462943":"06:00","2096185":"05:00","2646839":"13:00","2405168":"08:00","2613441":"05:00","58662":"08:00","2636251":"13:00","2688849":"08:00","2503267":"14:00","2615451":"05:00","2613764":"05:00","2564913":"05:00","2464181":"05:00","1926310":"08:00","2500229":"05:00","2688851":"08:00","2202292":"05:00","2452467":"05:00","2650502":"13:00","2405174":"08:00","1967182":"05:00","2411554":"08:00","2613469":"05:00","2613453":"05:00","2268522":"08:00","2564847":"06:00","2542080":"05:00","2315963":"13:00","1902807":"05:00","2503062":"06:00","2622029":"05:00","2076023":"05:00","2111748":"05:00","2462935":"05:00","2688853":"14:00","1727533":"05:00","2411557":"13:00","2503265":"14:00","536445":"05:00","2040379":"08:00","2613470":"05:00","2500368":"05:00","2688858":"06:00","2636268":"13:00","2142140":"13:00","2109651":"06:00","50345":"05:00","2415951":"13:00","2315966":"13:00","2361025":"08:00","2646820":"08:00","153234":"08:00","2462936":"08:00","2500194":"13:00","2613837":"05:00","2120037":"05:00","2503263":"05:00","2432555":"05:00","2332315":"14:00","1773088":"05:00","2114436":"05:00","2405277":"13:00","2613819":"05:00","2180396":"05:00","2415964":"05:00","2613444":"05:00","953776":"06:00","2613805":"05:00","2152160":"05:00","2636277":"13:00","2615447":"05:00","2132324":"06:00","2613799":"05:00","2542079":"05:00","2303636":"05:00","1921710":"05:00","2415978":"13:00","2541170":"08:00","2646676":"05:00","2613841":"05:00","2579679":"06:00","2580829":"13:00","2550382":"08:00","2613744":"05:00","2613767":"05:00","2160320":"05:00","1782237":"23:00","2646645":"05:00","2195292":"05:00","2579647":"05:00","2613834":"05:00","1926339":"05:00","2630464":"13:00","2516117":"08:00","1858520":"05:00","2564890":"06:00","2177221":"05:00","2613833":"05:00","2688866":"08:00","2555924":"05:00","2613759":"05:00","2613750":"05:00","2213638":"08:00","2613735":"05:00","2012871":"06:00","2303635":"05:00","2613776":"08:00","2613462":"05:00","2474808":"05:00","2552983":"13:00","2646655":"05:00","2646646":"05:00","2555971":"08:00","2613788":"06:00","2364210":"13:00","2132294":"05:00","2329964":"13:00","2413275":"14:00","2613745":"06:00","2114438":"06:00","2503277":"14:00","2177157":"08:00","2613843":"06:00","2550414":"13:00","2636261":"05:00","2613793":"05:00","2636285":"08:00","366639":"05:00","2613756":"14:00","2315970":"08:00","2613753":"14:00","2202370":"13:00","2500203":"06:00","2184237":"05:00","2503073":"06:00","2503266":"08:00","2613461":"06:00","2503275":"13:00","333082":"06:00","2500268":"05:00","2303597":"05:00","2474760":"05:00","2315926":"08:00","2052361":"05:00","1967457":"06:00","2613807":"06:00","2500201":"14:00","2412983":"08:00","2177223":"06:00","2721515":"08:00","2613813":"06:00","2504319":"05:00","2500200":"05:00","2374589":"13:00","2462938":"14:00","2464182":"08:00","2155614":"14:00","2646649":"05:00","2115602":"13:00","2613447":"05:00","2202430":"08:00","2550625":"14:00","2646651":"05:00","2613463":"06:00","1886657":"08:00","2114466":"05:00","2500228":"08:00","2550354":"06:00","2214101":"06:00","2500225":"05:00","2462930":"08:00","2613826":"06:00","2564924":"06:00","2613831":"23:00","2416028":"14:00","2503274":"14:00","1791168":"05:00","2202450":"23:00","2452468":"08:00","1967544":"05:00","2613801":"08:00","2613828":"13:00","2688870":"06:00","2256588":"05:00","2340930":"08:00","5487":"05:00","2503269":"08:00","2177211":"05:00","335409":"05:00","2040392":"08:00","1888863":"05:00","2044261":"05:00","2613765":"08:00","2613442":"13:00","2613817":"08:00","2374587":"13:00","2315990":"13:00","2503063":"08:00","2303626":"08:00","2452455":"05:00","2040364":"05:00","2503272":"23:00","2613792":"08:00","2500217":"05:00","2688900":"08:00","2613458":"08:00","2211403":"08:00","2500177":"14:00","2579659":"08:00","2613754":"06:00","2177225":"05:00","2550367":"08:00","2613787":"08:00","2411565":"14:00","2555955":"05:00","2615480":"08:00","2503262":"14:00","2580835":"08:00","2545242":"06:00","2339737":"08:00","1905593":"05:00","2550409":"08:00","504003":"05:00","2613821":"08:00","2636288":"06:00","2646833":"05:00","2202498":"13:00","2550630":"14:00","2405393":"14:00","59782":"05:00","2613830":"08:00","2613804":"05:00","2580016":"08:00","2464093":"05:00","2546034":"06:00","2413031":"08:00","1908859":"08:00","2613770":"08:00","2315931":"08:00","413529":"05:00","2452442":"23:00","2413282":"13:00","2340663":"13:00","2646847":"05:00","2452473":"14:00","2613781":"08:00","2363948":"08:00","2688927":"08:00","2549064":"08:00","2339745":"14:00","2142235":"08:00","2663169":"06:00","1843873":"08:00","427668":"05:00","2646851":"05:00","2114471":"05:00","2202582":"05:00","2613763":"08:00","2268562":"08:00","2646837":"13:00","2315986":"14:00","2613803":"08:00","2631595":"14:00","2177932":"05:00","2202630":"05:00","2546014":"06:00","2613758":"14:00","2152171":"05:00","1791166":"05:00","2125429":"05:00","2613783":"13:00","2303594":"06:00","2500202":"13:00","2184278":"23:00","1879791":"05:00","2500226":"05:00","2416105":"08:00","429696":"05:00","2555929":"06:00","2503273":"05:00","2688930":"06:00","2114473":"06:00","2613760":"13:00","2268567":"13:00","2503278":"08:00","2464179":"05:00","2613824":"13:00","550142":"05:00","2457911":"08:00","2382273":"13:00","2564834":"05:00","2646661":"05:00","2315994":"13:00","2613749":"14:00","1967552":"05:00","337324":"05:00","1701964":"23:00","2303646":"08:00","1921715":"05:00","1888868":"05:00","2329952":"08:00","1690679":"23:00","2564842":"06:00","2405418":"08:00","2613743":"08:00","2202647":"08:00"};
 const S = { cartoes: [], pedidos: [], cfg: {}, loaded: false, q: "", bf: "" };
 
 // Mesma regra do Controle Lenel: valor manual > CPF > EXT > nome, a partir da lista "groot_lista".
@@ -462,12 +463,43 @@ function render(){
     <td class="mono">${fmtCpf(c.cpf)}</td>
     <td class="mono">${esc(c.ext) || '<span class="muted">–</span>'}</td>
     <td><div class="cardcell"><input class="cardin" data-id="${esc(c.id)}" value="${esc(c.cartao || "")}" inputmode="numeric" placeholder="Nº do cartão" aria-label="Número do cartão de ${esc(c.nome)}"><span class="cardmsg" data-msg="${esc(c.id)}"></span> ${bancoStatus(c)}</div></td>
-    <td class="muted">${dt(c.updated_at || c.created_at)}</td>
+    <td class="muted">${esc(HORARIOS_HEADCOUNT[String(grootId(c)).replace(/\D/g, "")] || "Não informado")}</td>
   </tr>`).join("");
 }
 function setLive(state, txt){ const t=$("#liveTag"); t.className="live"+(state==="ok"?"":" off"); $("#liveTxt").textContent=txt; }
 
 let sb = null, busy = false;
+// Cache temporário por aba: evita consultas em cada recarregamento sem persistir CPF no disco.
+const DATA_CACHE_KEY = "lenel_banco_cache_v2";
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let lastSync = 0, refreshQueued = false;
+function restoreDataCache(){
+  try {
+    const raw = sessionStorage.getItem(DATA_CACHE_KEY);
+    if (!raw) return false;
+    const obj = JSON.parse(raw);
+    if (!obj || !Array.isArray(obj.cartoes) || !Array.isArray(obj.pedidos) || !obj.cfg || !obj.at) return false;
+    S.cartoes = obj.cartoes; S.pedidos = obj.pedidos; S.cfg = obj.cfg;
+    lastSync = obj.at; S.loaded = true;
+    withPhotos(); render();
+    setLive("ok", "CACHE LOCAL");
+    return true;
+  } catch { return false; }
+}
+function saveDataCache(){
+  try {
+    sessionStorage.setItem(DATA_CACHE_KEY, JSON.stringify({
+      at: lastSync, cartoes: S.cartoes.map(({selfie_data, ...c}) => c),
+      pedidos: S.pedidos, cfg: S.cfg
+    }));
+  } catch {} // Cache opcional: o aplicativo continua funcionando sem ele.
+}
+function scheduleRefresh(){
+  if (refreshQueued) return;
+  refreshQueued = true;
+  setTimeout(() => { refreshQueued = false; if (!document.hidden) load(true); }, 1200);
+}
+
 // Fotos: guardadas no navegador (mesmo cache do Controle Lenel). Cada foto é baixada uma vez por computador
 // e só de novo quando o cadastro muda. Economiza o tráfego do Supabase.
 const FOTOS = new Map();
@@ -514,8 +546,10 @@ async function loadPhotos(){
   } catch (e) { console.error("fotos", e); }
   finally { photosBusy = false; }
 }
-async function load(){
-  if (busy || !sb) return; busy = true;
+async function load(force = false){
+  if (busy || !sb) return;
+  if (!force && S.loaded && Date.now() - lastSync < CACHE_TTL_MS) return;
+  busy = true;
   try {
     const [c, p, g1, g2] = await Promise.all([
       sb.from("lenel_cartoes").select("id,nome,cpf,ext,cartao,created_at,updated_at").limit(5000),
@@ -526,11 +560,11 @@ async function load(){
     if (c.error) throw c.error;
     S.cartoes = c.data || []; withPhotos(); S.pedidos = p.error ? [] : (p.data || []);
     S.cfg = Object.fromEntries([...(g1.error ? [] : g1.data || []), ...(g2.error ? [] : g2.data || [])].map(r => [r.key, r.value]));
-    S.loaded = true;
-    $("#errBanner").hidden = true; setLive("ok", "AO VIVO"); if (!editing()) render();
+    S.loaded = true; lastSync = Date.now(); saveDataCache();
+    $("#errBanner").hidden = true; setLive("ok", "SINCRONIZADO"); if (!editing()) render();
     setTimeout(loadPhotos, 0);
   } catch (e) {
-    $("#errText").textContent = (e && (e.message || e.code)) || "Erro desconhecido"; $("#errBanner").hidden = false; setLive("off", "SEM CONEXÃO");
+    $("#errText").textContent = ((e && (e.message || e.code)) || "Erro desconhecido") + (S.cartoes.length ? " — exibindo últimos dados disponíveis" : ""); $("#errBanner").hidden = false; setLive("off", S.cartoes.length ? "DADOS EM CACHE" : "SEM CONEXÃO");
     if (!S.loaded) { S.loaded = true; render(); }
   } finally { busy = false; }
 }
@@ -553,7 +587,7 @@ async function saveCard(inp){
     const { data, error } = await sb.from("lenel_cartoes").update({ cartao, updated_at: new Date().toISOString() }).eq("id", c.id).select("id,cartao,updated_at");
     if (error) throw error;
     if (!data || !data.length) throw new Error("sem permissão para editar");
-    c.cartao = data[0].cartao; c.updated_at = data[0].updated_at;
+    c.cartao = data[0].cartao; c.updated_at = data[0].updated_at; saveDataCache();
     { const f = FOTOS.get(c.id); if (f) { f.v = verOf(c); PhotoCache.putMany([{ id: c.id, ...f }]); } }
     inp.classList.remove("dirty","bad"); inp.disabled = false; show("✓ Salvo", "ok"); toast("Cartão de " + c.nome + " salvo");
     setTimeout(() => { if (!editing()) render(); }, 1500);
@@ -566,7 +600,7 @@ $("#bancoBody").onclick = e => { const b = e.target.closest(".photo-btn"); if (!
 $("#viewerClose").onclick = () => $("#viewer").hidden = true;
 $("#viewer").onclick = e => { if (e.target.id === "viewer") $("#viewer").hidden = true; };
 addEventListener("keydown", e => { if (e.key === "Escape") { $("#viewer").hidden = true; closeSheet(); } });
-$("#errRetry").onclick = load;
+$("#errRetry").onclick = () => load(true);
 (function theme(){
   let saved = null; try { saved = localStorage.getItem("lenel_theme"); } catch {}
   if (saved) document.documentElement.dataset.theme = saved;
@@ -580,9 +614,14 @@ render();
 if (!window.supabase) { $("#errText").textContent = "A conexão com o Supabase não carregou. Verifique a internet."; $("#errBanner").hidden = false; setLive("off","SEM CONEXÃO"); S.loaded = true; render(); }
 else {
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  load();
-  try { sb.channel("lenel-consulta").on("postgres_changes",{event:"*",schema:"public",table:"lenel_cartoes"},()=>load()).on("postgres_changes",{event:"*",schema:"public",table:"lenel_pedidos"},()=>load()).on("postgres_changes",{event:"*",schema:"public",table:"lenel_config"},()=>load()).subscribe(); } catch {}
-  setInterval(() => { if (!document.hidden) load(); }, 30000);
+  const hasCache = restoreDataCache();
+  if (!hasCache || Date.now() - lastSync >= CACHE_TTL_MS) load(true);
+  else setTimeout(loadPhotos, 0);
+  try { sb.channel("lenel-consulta").on("postgres_changes",{event:"*",schema:"public",table:"lenel_cartoes"},scheduleRefresh).on("postgres_changes",{event:"*",schema:"public",table:"lenel_pedidos"},scheduleRefresh).on("postgres_changes",{event:"*",schema:"public",table:"lenel_config"},scheduleRefresh).subscribe(); } catch {}
+  // Atualiza ao voltar à aba, no máximo após cinco minutos sem sincronizar.
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+  window.addEventListener("online", () => load(true));
+  setInterval(() => { if (!document.hidden) load(); }, CACHE_TTL_MS);
 }
 </script>
 </body>
