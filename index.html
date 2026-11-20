@@ -2228,11 +2228,22 @@ async function recordMailHistory(entry){
  catch(e){ toast(cached ? "Histórico pendente de sincronização. Mantenha este navegador para tentar novamente." : "Não foi possível salvar o histórico deste envio. Anote os dados antes de fechar.",8000); }
  renderMailHistory();
 }
+/* traduz os erros mais comuns do EmailJS para o que fazer */
+function explainMailError(raw){
+ const t=String(raw||"");
+ if(/invalid[_ ]grant|reconnect your gmail|insufficient authentication scopes|gmail_api/i.test(t))
+  return "A conta do Gmail desconectou do EmailJS. Entre em emailjs.com → Email Services → serviço do Gmail → Reconnect (marque a permissão de enviar e-mail) e tente de novo. ("+t+")";
+ if(/limit|quota|429/i.test(t)) return "Acabou o limite de envios do EmailJS (plano grátis: 200/mês). Use “Abrir no Gmail” por enquanto. ("+t+")";
+ if(/public key|user id|invalid.*key/i.test(t)) return "A Public Key do EmailJS está errada ou mudou. Confira em Configurações. ("+t+")";
+ if(/service id|template id|not found/i.test(t)) return "Service ID ou Template ID do EmailJS não existe mais. Confira em Configurações. ("+t+")";
+ return t;
+}
 async function auditedMailSend(service, template, params, options, people){
  const entry=makeMailHistory(people,params,"enviado");
  let response;
  try { response=await emailjs.send(service,template,params,options); }
- catch(e){ entry.status="falha";entry.error=e?.text||e?.message||String(e); await recordMailHistory(entry);throw e; }
+ catch(e){ const raw=e?.text||e?.message||String(e); const msg=explainMailError(raw); entry.status="falha";entry.error=msg; await recordMailHistory(entry);
+   if(msg!==raw){ const err=new Error(msg); err.text=msg; throw err; } throw e; }
  await recordMailHistory(entry); return response;
 }
 async function syncPendingHistory(){
